@@ -1,6 +1,5 @@
 package com.example.penjadwalan_sidang.screens.dosen
 
-import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -20,13 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.penjadwalan_sidang.data.model.Thesis
-import com.example.penjadwalan_sidang.data.model.User
-import com.example.penjadwalan_sidang.data.remote.RetrofitClient
 import com.example.penjadwalan_sidang.data.repository.DosenRepository
-import com.example.penjadwalan_sidang.data.repository.ProfileRepository
-import retrofit2.Call
-import retrofit2.Callback
-import retrofit2.Response
 
 private val PrimaryColor = Color(0xFF4A90E2)
 
@@ -39,71 +32,23 @@ fun DashboardDosenScreen(
     onNavigateToProfil: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val repository = remember { DosenRepository(context) }
     var selectedTab by remember { mutableIntStateOf(0) }
 
-    // Repository
-    val dosenRepo = remember { DosenRepository(context) }
-    val profileRepo = remember { ProfileRepository(context) }
+    var pendingList by remember { mutableStateOf<List<Thesis>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // State untuk profile dosen
-    var dosenProfile by remember { mutableStateOf<User?>(null) }
-    var isLoadingProfile by remember { mutableStateOf(true) }
-
-    // State untuk pending thesis
-    var pendingThesisList by remember { mutableStateOf<List<Thesis>>(emptyList()) }
-    var isLoadingPending by remember { mutableStateOf(true) }
-    var errorPending by remember { mutableStateOf<String?>(null) }
-
-    // State untuk terjadwal (approved dengan scheduledAt)
-    var scheduledThesisList by remember { mutableStateOf<List<Thesis>>(emptyList()) }
-    var isLoadingScheduled by remember { mutableStateOf(true) }
-    var errorScheduled by remember { mutableStateOf<String?>(null) }
-
-    // Load profile dosen
+    // Load pending thesis
     LaunchedEffect(Unit) {
-        profileRepo.getMyProfile(
-            onSuccess = { user ->
-                dosenProfile = user
-                isLoadingProfile = false
-                Log.d("DASHBOARD_DOSEN", "Profile loaded: ${user.name}")
+        repository.getPendingThesis(
+            onSuccess = { list ->
+                pendingList = list
+                isLoading = false
             },
             onError = { error ->
-                Log.e("DASHBOARD_DOSEN", "Failed to load profile: $error")
-                isLoadingProfile = false
-            }
-        )
-    }
-
-    // Load pending thesis (5 terbaru)
-    LaunchedEffect(Unit) {
-        dosenRepo.getPendingThesis(
-            onSuccess = { thesisList ->
-                pendingThesisList = thesisList.take(5)
-                isLoadingPending = false
-                Log.d("DASHBOARD_DOSEN", "Loaded ${thesisList.size} pending thesis")
-            },
-            onError = { error ->
-                errorPending = error
-                isLoadingPending = false
-                Log.e("DASHBOARD_DOSEN", "Failed to load pending: $error")
-            }
-        )
-    }
-
-    // Load scheduled thesis (APPROVED dengan scheduledAt)
-    LaunchedEffect(Unit) {
-        dosenRepo.getAllThesis(
-            onSuccess = { allThesis ->
-                scheduledThesisList = allThesis
-                    .filter { it.status == "APPROVED" && it.scheduledAt != null }
-                    .take(5)
-                isLoadingScheduled = false
-                Log.d("DASHBOARD_DOSEN", "Loaded ${scheduledThesisList.size} scheduled thesis")
-            },
-            onError = { error ->
-                errorScheduled = error
-                isLoadingScheduled = false
-                Log.e("DASHBOARD_DOSEN", "Failed to load scheduled: $error")
+                errorMessage = error
+                isLoading = false
             }
         )
     }
@@ -113,7 +58,7 @@ fun DashboardDosenScreen(
             BottomBarDosen(selectedTab) { selected ->
                 selectedTab = selected
                 when (selected) {
-                    0 -> {} // Stay on Dashboard
+                    0 -> {}
                     1 -> onNavigateToPengajuan()
                     2 -> onNavigateToKalender()
                     3 -> onNavigateToProfil()
@@ -121,6 +66,7 @@ fun DashboardDosenScreen(
             }
         }
     ) { padding ->
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -128,6 +74,7 @@ fun DashboardDosenScreen(
                 .padding(padding)
                 .background(Color(0xFFFFF5F5))
         ) {
+
             // HEADER
             Row(
                 modifier = Modifier
@@ -144,11 +91,7 @@ fun DashboardDosenScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (isLoadingProfile) "..." else {
-                            dosenProfile?.name?.let {
-                                it.split(" ").take(2).joinToString("") { word -> word.first().toString() }
-                            } ?: "D"
-                        },
+                        text = "PA",
                         color = Color.White,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
@@ -159,7 +102,7 @@ fun DashboardDosenScreen(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (isLoadingProfile) "Loading..." else (dosenProfile?.name ?: "Dosen"),
+                        text = "Pak Afif",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -181,7 +124,7 @@ fun DashboardDosenScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // PENGAJUAN TERBARU
+            // PENGAJUAN TERBARU (FROM API)
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -193,6 +136,7 @@ fun DashboardDosenScreen(
                         .background(Color.White)
                         .padding(16.dp)
                 ) {
+
                     Text(
                         text = "Pengajuan Terbaru Tugas Akhir Mahasiswa",
                         fontSize = 18.sp,
@@ -200,57 +144,56 @@ fun DashboardDosenScreen(
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
 
-                    // Loading state
-                    if (isLoadingPending) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(color = PrimaryColor)
+                    when {
+                        isLoading -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(color = PrimaryColor)
+                            }
                         }
-                    }
-                    // Error state
-                    else if (errorPending != null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(100.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "⚠️ $errorPending",
-                                color = Color.Red,
-                                fontSize = 14.sp
-                            )
+                        errorMessage != null -> {
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color(0xFFFFEBEE)
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = "⚠️ $errorMessage",
+                                    color = Color(0xFFC62828),
+                                    modifier = Modifier.padding(16.dp),
+                                    fontSize = 14.sp
+                                )
+                            }
                         }
-                    }
-                    // Empty state
-                    else if (pendingThesisList.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(100.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Tidak ada pengajuan pending",
-                                color = Color.Gray,
-                                fontSize = 14.sp
-                            )
+                        pendingList.isEmpty() -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Tidak ada pengajuan pending",
+                                    color = Color.Gray,
+                                    fontSize = 14.sp
+                                )
+                            }
                         }
-                    }
-                    // Data loaded
-                    else {
-                        pendingThesisList.forEach { thesis ->
-                            DosenListItem(
-                                nama = thesis.student?.name ?: "Mahasiswa",
-                                nim = thesis.studentId.take(8),
-                                judul = thesis.title,
-                                tanggal = thesis.createdAt.substring(0, 10),
-                                status = thesis.status
-                            )
+                        else -> {
+                            pendingList.take(3).forEach { thesis ->
+                                DosenListItem(
+                                    nama = thesis.student?.name ?: "Unknown",
+                                    nim = thesis.student?.id?.take(10) ?: "-",
+                                    judul = thesis.title,
+                                    tanggal = thesis.createdAt.substring(0, 10),
+                                    status = thesis.status
+                                )
+                            }
                         }
                     }
 
@@ -276,7 +219,7 @@ fun DashboardDosenScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // TERJADWAL
+            // TERJADWAL (STATIC - sesuai FE2)
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -288,6 +231,7 @@ fun DashboardDosenScreen(
                         .background(Color.White)
                         .padding(16.dp)
                 ) {
+
                     Text(
                         text = "Terjadwal",
                         fontSize = 18.sp,
@@ -295,62 +239,15 @@ fun DashboardDosenScreen(
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
 
-                    // Loading state
-                    if (isLoadingScheduled) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(color = PrimaryColor)
-                        }
-                    }
-                    // Error state
-                    else if (errorScheduled != null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(100.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "⚠️ $errorScheduled",
-                                color = Color.Red,
-                                fontSize = 14.sp
-                            )
-                        }
-                    }
-                    // Empty state
-                    else if (scheduledThesisList.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(100.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Belum ada sidang terjadwal",
-                                color = Color.Gray,
-                                fontSize = 14.sp
-                            )
-                        }
-                    }
-                    // Data loaded
-                    else {
-                        scheduledThesisList.forEach { thesis ->
-                            val scheduledDate = thesis.scheduledAt?.substring(0, 10) ?: "TBA"
-                            val scheduledTime = thesis.scheduledAt?.substring(11, 16) ?: "00:00"
-
-                            DosenListItem(
-                                nama = thesis.student?.name ?: "Mahasiswa",
-                                nim = thesis.studentId.take(8),
-                                judul = thesis.title,
-                                tanggal = scheduledDate,
-                                jam = "$scheduledTime-${(scheduledTime.split(":")[0].toInt() + 2).toString().padStart(2, '0')}:${scheduledTime.split(":")[1]}",
-                                isScheduled = true
-                            )
-                        }
+                    repeat(5) {
+                        DosenListItem(
+                            nama = "Budi Santoso",
+                            nim = "20/190001",
+                            judul = "Analisis Jaringan Menggunakan Metode IDS",
+                            tanggal = "20-10-2025",
+                            jam = "09:00–11:00",
+                            isScheduled = true
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -394,6 +291,7 @@ fun DosenListItem(
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+
         Box(
             modifier = Modifier
                 .size(40.dp)
@@ -413,7 +311,7 @@ fun DosenListItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(text = nama, fontWeight = FontWeight.Bold)
             Text(text = nim, fontSize = 12.sp, color = Color.Gray)
-            Text(text = judul, fontSize = 12.sp, maxLines = 1)
+            Text(text = judul, fontSize = 12.sp)
         }
 
         Column(horizontalAlignment = Alignment.End) {
@@ -430,27 +328,22 @@ fun DosenListItem(
 
 @Composable
 fun StatusBadge(status: String) {
-    val (bgColor, textColor) = when (status) {
-        "APPROVED" -> Color(0xFF4CAF50) to Color.White
-        "REJECTED" -> Color(0xFFF44336) to Color.White
-        else -> Color(0xFFFFC542) to Color.White
+    val backgroundColor = when (status) {
+        "APPROVED" -> Color(0xFF4CAF50)
+        "REJECTED" -> Color(0xFFF44336)
+        else -> Color(0xFFFFC542)
     }
 
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(bgColor)
+            .background(backgroundColor)
             .padding(horizontal = 10.dp, vertical = 4.dp)
     ) {
         Text(
-            text = when (status) {
-                "PENDING" -> "Menunggu"
-                "APPROVED" -> "Disetujui"
-                "REJECTED" -> "Ditolak"
-                else -> status
-            },
+            text = status,
             fontSize = 12.sp,
-            color = textColor,
+            color = Color.White,
             fontWeight = FontWeight.Bold
         )
     }
@@ -459,10 +352,38 @@ fun StatusBadge(status: String) {
 @Composable
 fun BottomBarDosen(selectedTab: Int, onSelected: (Int) -> Unit) {
     NavigationBar(containerColor = Color.White) {
-        CustomNavigationBarItemDosen(0, selectedTab, Icons.Default.Home, "Dashboard", onSelected)
-        CustomNavigationBarItemDosen(1, selectedTab, Icons.Default.Description, "Pengajuan", onSelected)
-        CustomNavigationBarItemDosen(2, selectedTab, Icons.Default.CalendarMonth, "Kalender", onSelected)
-        CustomNavigationBarItemDosen(3, selectedTab, Icons.Default.Person, "Profil", onSelected)
+
+        CustomNavigationBarItemDosen(
+            index = 0,
+            selectedTab = selectedTab,
+            icon = Icons.Default.Home,
+            label = "Dashboard",
+            onTabSelected = onSelected
+        )
+
+        CustomNavigationBarItemDosen(
+            index = 1,
+            selectedTab = selectedTab,
+            icon = Icons.Default.Description,
+            label = "Pengajuan",
+            onTabSelected = onSelected
+        )
+
+        CustomNavigationBarItemDosen(
+            index = 2,
+            selectedTab = selectedTab,
+            icon = Icons.Default.CalendarMonth,
+            label = "Kalender",
+            onTabSelected = onSelected
+        )
+
+        CustomNavigationBarItemDosen(
+            index = 3,
+            selectedTab = selectedTab,
+            icon = Icons.Default.Person,
+            label = "Profil",
+            onTabSelected = onSelected
+        )
     }
 }
 

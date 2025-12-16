@@ -1,6 +1,5 @@
 package com.example.penjadwalan_sidang.screens.dosen
 
-import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -36,7 +35,7 @@ fun PengajuanDetailScreen(
     onNavigateToJadwal: (mahasiswaId: String) -> Unit
 ) {
     val context = LocalContext.current
-    val dosenRepo = remember { DosenRepository(context) }
+    val repository = remember { DosenRepository(context) }
 
     var thesis by remember { mutableStateOf<Thesis?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -46,40 +45,16 @@ fun PengajuanDetailScreen(
 
     // Load thesis detail
     LaunchedEffect(id) {
-        dosenRepo.getThesisDetail(
+        repository.getThesisDetail(
             id = id,
-            onSuccess = { loadedThesis ->
-                thesis = loadedThesis
+            onSuccess = { data ->
+                thesis = data
                 isLoading = false
-                Log.d("DETAIL_SCREEN", "Thesis loaded: ${loadedThesis.title}")
             },
             onError = { error ->
                 errorMessage = error
                 isLoading = false
-                Log.e("DETAIL_SCREEN", "Failed to load: $error")
-            }
-        )
-    }
-
-    if (showRejectionDialog) {
-        RejectionCommentDialog(
-            onDismiss = { showRejectionDialog = false },
-            onConfirmRejection = { comment ->
-                isSubmitting = true
-                dosenRepo.reviewThesis(
-                    id = id,
-                    decision = "REJECTED",
-                    onSuccess = {
-                        Toast.makeText(context, "✅ Pengajuan ditolak", Toast.LENGTH_SHORT).show()
-                        showRejectionDialog = false
-                        isSubmitting = false
-                        onNavigateBack()
-                    },
-                    onError = { error ->
-                        Toast.makeText(context, "❌ $error", Toast.LENGTH_LONG).show()
-                        isSubmitting = false
-                    }
-                )
+                Toast.makeText(context, "Error: $error", Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -97,215 +72,159 @@ fun PengajuanDetailScreen(
             )
         }
     ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(BackgroundColor)
-                .padding(padding)
-        ) {
-            if (isLoading) {
-                // Loading state
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = PrimaryColor)
-                }
-            } else if (errorMessage != null) {
-                // Error state
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        Icons.Default.Cancel,
-                        contentDescription = null,
-                        tint = Color.Red,
-                        modifier = Modifier.size(64.dp)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "⚠️ Gagal memuat data",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = Color.Red
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = errorMessage ?: "Unknown error",
-                        fontSize = 14.sp,
-                        color = Color.Gray
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Button(
-                        onClick = onNavigateBack,
-                        colors = ButtonDefaults.buttonColors(PrimaryColor)
-                    ) {
-                        Text("Kembali")
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = PrimaryColor)
+            }
+        } else if (errorMessage != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE))) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("⚠️ Error", fontWeight = FontWeight.Bold, color = DangerColor)
+                        Text(errorMessage ?: "Unknown error", color = Color.Gray)
                     }
                 }
-            } else if (thesis != null) {
-                // Data loaded
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(16.dp)
+            }
+        } else if (thesis != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(BackgroundColor)
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp)
+            ) {
+
+                Text(
+                    text = "Pengajuan Mahasiswa",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
-                    Text(
-                        text = "Pengajuan Mahasiswa",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
+                    Column(modifier = Modifier.padding(16.dp)) {
 
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(Color.White),
-                        elevation = CardDefaults.cardElevation(2.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth()) {
-                                DataField(
-                                    label = "Nama Mahasiswa",
-                                    value = thesis!!.student?.name ?: "Loading...",
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Spacer(modifier = Modifier.width(16.dp))
-                                DataField(
-                                    label = "NIM/ ID Mahasiswa",
-                                    value = thesis!!.studentId,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Spacer(modifier = Modifier.width(16.dp))
-                                DataField(
-                                    label = "Jurusan",
-                                    value = thesis!!.student?.prodi ?: "-",
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-
+                        Row(modifier = Modifier.fillMaxWidth()) {
                             DataField(
-                                label = "Judul Tugas Akhir",
-                                value = thesis!!.title
+                                label = "Nama Mahasiswa",
+                                value = thesis!!.student?.name ?: "Unknown",
+                                modifier = Modifier.weight(1f)
                             )
-                            Spacer(modifier = Modifier.height(16.dp))
-
+                            Spacer(modifier = Modifier.width(16.dp))
                             DataField(
-                                label = "Tautan Tugas Akhir",
-                                value = thesis!!.docUrl,
-                                isLink = true
+                                label = "NIM/ ID Mahasiswa",
+                                value = thesis!!.student?.id ?: "-",
+                                modifier = Modifier.weight(1f)
                             )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            DataField(
+                                label = "Jurusan",
+                                value = thesis!!.student?.prodi ?: "-",
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                            Spacer(modifier = Modifier.height(32.dp))
+                        DataField(label = "Judul Tugas Akhir", value = thesis!!.title)
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                            // Action buttons (only show if PENDING)
-                            if (thesis!!.status == "PENDING") {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Button(
-                                        onClick = {
-                                            isSubmitting = true
-                                            dosenRepo.reviewThesis(
-                                                id = id,
-                                                decision = "APPROVED",
-                                                onSuccess = {
-                                                    Toast.makeText(
-                                                        context,
-                                                        "✅ Pengajuan disetujui",
-                                                        Toast.LENGTH_SHORT
-                                                    ).show()
-                                                    isSubmitting = false
-                                                    onNavigateToJadwal(thesis!!.studentId)
-                                                },
-                                                onError = { error ->
-                                                    Toast.makeText(
-                                                        context,
-                                                        "❌ $error",
-                                                        Toast.LENGTH_LONG
-                                                    ).show()
-                                                    isSubmitting = false
-                                                }
-                                            )
-                                        },
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(48.dp),
-                                        colors = ButtonDefaults.buttonColors(SuccessColor),
-                                        shape = RoundedCornerShape(8.dp),
-                                        enabled = !isSubmitting
-                                    ) {
-                                        if (isSubmitting) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(20.dp),
-                                                color = Color.White,
-                                                strokeWidth = 2.dp
-                                            )
-                                        } else {
-                                            Icon(
-                                                Icons.Default.CheckCircle,
-                                                contentDescription = "Verifikasi",
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text("Verifikasi", fontWeight = FontWeight.SemiBold)
-                                        }
-                                    }
+                        DataField(label = "Tautan Tugas Akhir", value = thesis!!.docUrl, isLink = true)
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                                    Spacer(modifier = Modifier.width(16.dp))
+                        DataField(label = "Status", value = thesis!!.status)
 
-                                    Button(
-                                        onClick = { showRejectionDialog = true },
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(48.dp),
-                                        colors = ButtonDefaults.buttonColors(DangerColor),
-                                        shape = RoundedCornerShape(8.dp),
-                                        enabled = !isSubmitting
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Cancel,
-                                            contentDescription = "Tolak",
-                                            modifier = Modifier.size(20.dp)
+                        Spacer(modifier = Modifier.height(32.dp))
+
+                        // Tombol Aksi (hanya jika status PENDING)
+                        if (thesis!!.status == "PENDING") {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Button(
+                                    onClick = {
+                                        isSubmitting = true
+                                        repository.reviewThesis(
+                                            id = id,
+                                            decision = "APPROVED",
+                                            onSuccess = { updatedThesis ->
+                                                isSubmitting = false
+                                                Toast.makeText(context, "✅ TA Disetujui!", Toast.LENGTH_SHORT).show()
+                                                // Navigate ke jadwal
+                                                onNavigateToJadwal(id)
+                                            },
+                                            onError = { error ->
+                                                isSubmitting = false
+                                                Toast.makeText(context, "❌ $error", Toast.LENGTH_LONG).show()
+                                            }
                                         )
+                                    },
+                                    modifier = Modifier.weight(1f).height(48.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = SuccessColor),
+                                    shape = RoundedCornerShape(8.dp),
+                                    enabled = !isSubmitting
+                                ) {
+                                    if (isSubmitting) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            color = Color.White,
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Icon(Icons.Default.CheckCircle, contentDescription = "Verifikasi", modifier = Modifier.size(20.dp))
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Tolak", fontWeight = FontWeight.SemiBold)
+                                        Text("Verifikasi", fontWeight = FontWeight.SemiBold)
                                     }
                                 }
-                            } else {
-                                // Show status badge if already processed
-                                Box(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    contentAlignment = Alignment.Center
+
+                                Spacer(modifier = Modifier.width(16.dp))
+
+                                Button(
+                                    onClick = { showRejectionDialog = true },
+                                    modifier = Modifier.weight(1f).height(48.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = DangerColor),
+                                    shape = RoundedCornerShape(8.dp),
+                                    enabled = !isSubmitting
                                 ) {
-                                    Card(
-                                        colors = CardDefaults.cardColors(
-                                            when (thesis!!.status) {
-                                                "APPROVED" -> Color(0xFFE8F5E9)
-                                                "REJECTED" -> Color(0xFFFFEBEE)
-                                                else -> Color(0xFFFFF9C4)
-                                            }
-                                        )
-                                    ) {
-                                        Text(
-                                            text = "Status: ${thesis!!.status}",
-                                            modifier = Modifier.padding(16.dp),
-                                            fontWeight = FontWeight.Bold,
-                                            color = when (thesis!!.status) {
-                                                "APPROVED" -> Color(0xFF4CAF50)
-                                                "REJECTED" -> Color(0xFFF44336)
-                                                else -> Color(0xFFFFC107)
-                                            }
-                                        )
-                                    }
+                                    Icon(Icons.Default.Cancel, contentDescription = "Tolak", modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Tolak", fontWeight = FontWeight.SemiBold)
                                 }
+                            }
+                        } else {
+                            // Status sudah direview
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = when (thesis!!.status) {
+                                        "APPROVED" -> Color(0xFFE8F5E9)
+                                        "REJECTED" -> Color(0xFFFFEBEE)
+                                        else -> Color(0xFFFFF9C4)
+                                    }
+                                )
+                            ) {
+                                Text(
+                                    text = "Status: ${thesis!!.status}",
+                                    modifier = Modifier.padding(16.dp),
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
                     }
@@ -313,15 +232,73 @@ fun PengajuanDetailScreen(
             }
         }
     }
+
+    // Dialog Rejection
+    if (showRejectionDialog) {
+        var rejectionComment by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { showRejectionDialog = false },
+            title = {
+                Text(
+                    "Tolak Pengajuan Tugas Akhir",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = DangerColor
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        "Apakah Anda yakin ingin menolak pengajuan ini?",
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    OutlinedTextField(
+                        value = rejectionComment,
+                        onValueChange = { rejectionComment = it },
+                        label = { Text("Komentar (Opsional)") },
+                        modifier = Modifier.fillMaxWidth().height(120.dp),
+                        singleLine = false,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRejectionDialog = false
+                        isSubmitting = true
+                        repository.reviewThesis(
+                            id = id,
+                            decision = "REJECTED",
+                            onSuccess = {
+                                isSubmitting = false
+                                Toast.makeText(context, "❌ TA Ditolak", Toast.LENGTH_SHORT).show()
+                                onNavigateBack()
+                            },
+                            onError = { error ->
+                                isSubmitting = false
+                                Toast.makeText(context, "❌ $error", Toast.LENGTH_LONG).show()
+                            }
+                        )
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = DangerColor)
+                ) {
+                    Text("Tolak")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRejectionDialog = false }) {
+                    Text("Batal")
+                }
+            },
+            shape = RoundedCornerShape(12.dp)
+        )
+    }
 }
 
 @Composable
-fun DataField(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-    isLink: Boolean = false
-) {
+fun DataField(label: String, value: String, modifier: Modifier = Modifier, isLink: Boolean = false) {
     Column(modifier = modifier) {
         Text(
             text = label,
@@ -335,57 +312,4 @@ fun DataField(
             color = if (isLink) PrimaryColor else Color.Black
         )
     }
-}
-
-@Composable
-fun RejectionCommentDialog(
-    onDismiss: () -> Unit,
-    onConfirmRejection: (comment: String) -> Unit
-) {
-    var rejectionComment by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                "Tolak Pengajuan Tugas Akhir",
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                color = DangerColor
-            )
-        },
-        text = {
-            Column {
-                Text(
-                    "Mohon berikan komentar atau alasan penolakan:",
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                OutlinedTextField(
-                    value = rejectionComment,
-                    onValueChange = { rejectionComment = it },
-                    label = { Text("Komentar Penolakan") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp),
-                    singleLine = false,
-                    shape = RoundedCornerShape(8.dp)
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirmRejection(rejectionComment) },
-                enabled = rejectionComment.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(DangerColor)
-            ) {
-                Text("Tolak dan Kirim")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Batal")
-            }
-        },
-        shape = RoundedCornerShape(12.dp)
-    )
 }

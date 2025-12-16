@@ -14,7 +14,7 @@ object Constants {
     // 4. Copy CLIENT ID nya
     //
     // Format: xxxxx.apps.googleusercontent.com
-    const val GOOGLE_CLIENT_ID="191478654932-24j21jk2pmtnvk42e7qrbt1c2ufoifnd.apps.googleusercontent.com"
+    const val GOOGLE_CLIENT_ID="191478654932-3k8448tve2cpp7o9dh7ed9vmg2ti6sbc.apps.googleusercontent.com"
 
     // Endpoint URLs
     const val HEALTH = "health"

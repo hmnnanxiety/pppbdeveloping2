@@ -14,6 +14,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.penjadwalan_sidang.navigation.NavGraphDosen
 import com.example.penjadwalan_sidang.navigation.NavGraphMahasiswa
 import com.example.penjadwalan_sidang.screens.login.LoginScreen
+import com.example.penjadwalan_sidang.screens.login.UserSession
 import com.example.penjadwalan_sidang.ui.theme.PengajuanTheme
 import com.example.penjadwalan_sidang.utils.SessionManager
 
@@ -46,17 +47,19 @@ fun MainNavigation() {
         "login_route"
     }
 
+    // Isi UserSession global biar API tetap jalan
+    if (sessionManager.isLogin()) {
+        UserSession.token = sessionManager.getToken()
+        UserSession.role = sessionManager.getRole()
+    }
+
     NavHost(navController = navController, startDestination = startDest) {
 
         // 1. Rute Login
         composable("login_route") {
             LoginScreen(
-                onLoginMahasiswa = { navController.navigate("mahasiswa_route") {
-                    popUpTo("login_route") { inclusive = true }
-                }},
-                onLoginDosen = { navController.navigate("dosen_route") {
-                    popUpTo("login_route") { inclusive = true }
-                }}
+                onLoginMahasiswa = { navController.navigate("mahasiswa_route") },
+                onLoginDosen = { navController.navigate("dosen_route") }
             )
         }
 

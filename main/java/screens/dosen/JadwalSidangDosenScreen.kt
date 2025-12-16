@@ -1,6 +1,5 @@
 package com.example.penjadwalan_sidang.screens.dosen
 
-import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,22 +13,20 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import com.example.penjadwalan_sidang.data.repository.DosenRepository
 import java.time.LocalDate
 import java.time.YearMonth
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.TextStyle as JavaTextStyle
+import java.time.format.TextStyle
 import java.util.*
 import kotlin.math.ceil
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.ui.draw.clip
 
 private val PrimaryColor = Color(0xFF4A90E2)
 private val BackgroundColor = Color(0xFFFFF5F5)
@@ -42,12 +39,12 @@ fun JadwalSidangDosenScreen(
     onJadwalConfirmed: (LocalDate, String, String) -> Unit
 ) {
     val context = LocalContext.current
-    val dosenRepo = remember { DosenRepository(context) }
+    val repository = remember { DosenRepository(context) }
 
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
-    var selectedDate by remember { mutableStateOf(LocalDate.now()) }
-    var selectedHour by remember { mutableIntStateOf(10) }
-    var selectedMinute by remember { mutableIntStateOf(0) }
+    var selectedDate by remember { mutableStateOf(LocalDate.now().plusDays(1)) } // Default besok
+    var selectedHour by remember { mutableStateOf(10) }
+    var selectedMinute by remember { mutableStateOf(0) }
     var selectedRuangan by remember { mutableStateOf("R.301") }
     var isSubmitting by remember { mutableStateOf(false) }
 
@@ -73,6 +70,7 @@ fun JadwalSidangDosenScreen(
                 .padding(padding)
                 .padding(16.dp)
         ) {
+
             Text(
                 text = "Pilih Tanggal Sidang",
                 fontSize = 18.sp,
@@ -129,46 +127,35 @@ fun JadwalSidangDosenScreen(
             Button(
                 onClick = {
                     // Validasi tanggal harus masa depan
-                    if (selectedDate.isBefore(LocalDate.now())) {
-                        Toast.makeText(
-                            context,
-                            "❌ Tanggal harus di masa depan",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                    if (selectedDate <= LocalDate.now()) {
+                        Toast.makeText(context, "Tanggal harus di masa depan", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
 
                     isSubmitting = true
 
-                    // Format tanggal ke ISO 8601 dengan timezone
-                    val dateTime = selectedDate.atTime(selectedHour, selectedMinute)
-                    val zonedDateTime = dateTime.atZone(ZoneId.systemDefault())
-                    val isoString = zonedDateTime.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+                    // Format: 2025-12-20T10:00:00Z
+                    val isoDate = String.format(
+                        "%04d-%02d-%02dT%02d:%02d:00Z",
+                        selectedDate.year,
+                        selectedDate.monthValue,
+                        selectedDate.dayOfMonth,
+                        selectedHour,
+                        selectedMinute
+                    )
 
-                    Log.d("JADWAL_SIDANG", "Submitting schedule: $isoString for thesis ID: $mahasiswaId")
-
-                    dosenRepo.scheduleThesis(
+                    repository.scheduleThesis(
                         id = mahasiswaId,
-                        date = isoString,
+                        date = isoDate,
                         onSuccess = { updatedThesis ->
-                            Toast.makeText(
-                                context,
-                                "✅ Jadwal sidang berhasil disimpan!",
-                                Toast.LENGTH_SHORT
-                            ).show()
                             isSubmitting = false
-
+                            Toast.makeText(context, "✅ Jadwal berhasil dibuat!", Toast.LENGTH_SHORT).show()
                             val formattedTime = String.format("%02d:%02d", selectedHour, selectedMinute)
                             onJadwalConfirmed(selectedDate, formattedTime, selectedRuangan)
                         },
                         onError = { error ->
-                            Toast.makeText(
-                                context,
-                                "❌ $error",
-                                Toast.LENGTH_LONG
-                            ).show()
                             isSubmitting = false
-                            Log.e("JADWAL_SIDANG", "Failed to schedule: $error")
+                            Toast.makeText(context, "❌ $error", Toast.LENGTH_LONG).show()
                         }
                     )
                 },
@@ -176,7 +163,7 @@ fun JadwalSidangDosenScreen(
                     .align(Alignment.End)
                     .width(150.dp)
                     .height(48.dp),
-                colors = ButtonDefaults.buttonColors(PrimaryColor),
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor),
                 shape = RoundedCornerShape(8.dp),
                 enabled = !isSubmitting
             ) {
@@ -187,11 +174,7 @@ fun JadwalSidangDosenScreen(
                         strokeWidth = 2.dp
                     )
                 } else {
-                    Icon(
-                        Icons.Default.CalendarMonth,
-                        contentDescription = "Jadwalkan",
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Icon(Icons.Default.CalendarMonth, contentDescription = "Jadwalkan", modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Jadwalkan")
                 }
@@ -209,7 +192,7 @@ fun ScheduleCalendarView(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(Color.White),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(12.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -222,7 +205,7 @@ fun ScheduleCalendarView(
                     Icon(Icons.Default.ArrowBack, "Previous month")
                 }
                 Text(
-                    text = "${currentMonth.month.getDisplayName(JavaTextStyle.SHORT, Locale("id", "ID"))} ${currentMonth.year}",
+                    text = "${currentMonth.month.getDisplayName(TextStyle.SHORT, Locale("id", "ID"))} ${currentMonth.year}",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -266,29 +249,25 @@ fun ScheduleCalendarView(
                                 if (dayOfMonth in 1..daysInMonth) {
                                     val date = currentMonth.atDay(dayOfMonth)
                                     val isSelected = date == selectedDate
-                                    val isPast = date.isBefore(LocalDate.now())
+                                    val isPast = date < LocalDate.now()
 
-                                    Box(
+                                    Column(
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .clip(RoundedCornerShape(8.dp))
-                                            .background(
-                                                when {
-                                                    isSelected -> PrimaryColor.copy(alpha = 0.2f)
-                                                    isPast -> Color.Gray.copy(alpha = 0.1f)
-                                                    else -> Color.Transparent
-                                                }
-                                            )
-                                            .clickable(enabled = !isPast) { onDateSelected(date) }
+                                            .background(if (isSelected) PrimaryColor.copy(alpha = 0.2f) else Color.Transparent)
+                                            .clickable(enabled = !isPast) {
+                                                if (!isPast) onDateSelected(date)
+                                            }
                                             .padding(4.dp),
-                                        contentAlignment = Alignment.Center
+                                        horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
                                         Text(
                                             text = dayOfMonth.toString(),
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = when {
-                                                isPast -> Color.Gray
+                                                isPast -> Color.LightGray
                                                 isSelected -> PrimaryColor
                                                 else -> Color.Black
                                             }
@@ -312,19 +291,15 @@ fun TimePickerView(
     onMinuteChange: (Int) -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(200.dp),
-        colors = CardDefaults.cardColors(Color.White),
+        modifier = Modifier.fillMaxWidth().height(200.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
+            modifier = Modifier.fillMaxSize().padding(16.dp)
         ) {
             Text(
                 text = "24 Hours",
@@ -332,7 +307,9 @@ fun TimePickerView(
                 color = Color.Gray,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
                     text = String.format("%02d", selectedHour),
                     fontSize = 32.sp,
@@ -342,19 +319,22 @@ fun TimePickerView(
                         onHourChange((selectedHour + 1) % 24)
                     }
                 )
+
                 Text(
                     text = ":",
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
+                    color = Color.Black,
                     modifier = Modifier.padding(horizontal = 8.dp)
                 )
+
                 Text(
                     text = String.format("%02d", selectedMinute),
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
                     color = PrimaryColor,
                     modifier = Modifier.clickable {
-                        onMinuteChange((selectedMinute + 5) % 60)
+                        onMinuteChange((selectedMinute + 15) % 60)
                     }
                 )
             }
@@ -375,17 +355,13 @@ fun RuanganPicker(
     onRuanganSelected: (String) -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(200.dp),
-        colors = CardDefaults.cardColors(Color.White),
+        modifier = Modifier.fillMaxWidth().height(200.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxSize().padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
