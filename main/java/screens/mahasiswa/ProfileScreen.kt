@@ -1,6 +1,8 @@
 package com.example.penjadwalan_sidang.screens.mahasiswa
 
 import android.widget.Toast
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -31,7 +33,7 @@ fun ProfileScreen(
     val context = LocalContext.current
     val repository = remember { ProfileRepository(context) }
 
-    // Form fields
+    // ✅ SEMUA FIELD EDITABLE (termasuk NIM/ID & Email sebagai display)
     var nama by remember { mutableStateOf("") }
     var nim by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -85,11 +87,10 @@ fun ProfileScreen(
                     .padding(padding)
                     .verticalScroll(rememberScrollState())
             ) {
-                // Header
+                // ✅ HEADER KONSISTEN (tanpa background putih)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color.White)
                         .padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
@@ -114,7 +115,16 @@ fun ProfileScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = nama.take(2).uppercase(),
+                            text = if (nama.isNotEmpty()) {
+                                val parts = nama.split(" ")
+                                if (parts.size >= 2) {
+                                    "${parts[0].take(1)}${parts[1].take(1)}".uppercase()
+                                } else {
+                                    nama.take(2).uppercase()
+                                }
+                            } else {
+                                "U"
+                            },
                             color = Color.White,
                             fontWeight = FontWeight.Bold
                         )
@@ -122,149 +132,186 @@ fun ProfileScreen(
                 }
 
                 // Profile Content
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
+                AnimatedVisibility(
+                    visible = !isLoadingProfile,
+                    enter = fadeIn(tween(300)) + slideInVertically(tween(300)),
+                    exit = fadeOut(tween(300))
                 ) {
-                    Text(
-                        text = "Profil",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 24.dp)
-                    )
-
                     Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        ProfileTextField(
-                            label = "Nama",
-                            value = nama,
-                            onValueChange = { nama = it },
-                            enabled = !isLoading
-                        )
-
-                        ProfileTextField(
-                            label = "NIM / ID Mahasiswa",
-                            value = nim,
-                            onValueChange = {},
-                            enabled = false // Read-only
-                        )
-
-                        ProfileTextField(
-                            label = "Program Studi",
-                            value = prodi,
-                            onValueChange = { prodi = it },
-                            enabled = !isLoading
-                        )
-
-                        ProfileTextField(
-                            label = "Email",
-                            value = email,
-                            onValueChange = {},
-                            enabled = false // Read-only
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(32.dp))
-
-                    // Save Button
-                    Button(
-                        onClick = {
-                            isLoading = true
-
-                            repository.updateProfile(
-                                name = nama,
-                                prodi = prodi,
-                                onSuccess = { updatedUser ->
-                                    isLoading = false
-                                    Toast.makeText(
-                                        context,
-                                        "✅ Profil berhasil disimpan!",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-
-                                    // Update state dengan data terbaru
-                                    nama = updatedUser.name ?: ""
-                                    prodi = updatedUser.prodi ?: ""
-                                },
-                                onError = { errorMsg ->
-                                    isLoading = false
-                                    Toast.makeText(
-                                        context,
-                                        "❌ $errorMsg",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                }
-                            )
-                        },
                         modifier = Modifier
-                            .align(Alignment.CenterHorizontally)
-                            .width(160.dp)
-                            .height(48.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF4A90E2)
-                        ),
-                        shape = RoundedCornerShape(8.dp),
-                        enabled = !isLoading
+                            .fillMaxWidth()
+                            .padding(16.dp)
                     ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = Color.White,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Row(
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
+                        Text(
+                            text = "Profil",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 24.dp)
+                        )
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = CardDefaults.cardElevation(2.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(20.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Save,
-                                    contentDescription = "Save",
-                                    modifier = Modifier.size(20.dp)
+                                // ✅ Nama - EDITABLE
+                                ProfileTextField(
+                                    label = "Nama",
+                                    value = nama,
+                                    onValueChange = { nama = it },
+                                    enabled = !isLoading,
+                                    placeholder = "Masukkan nama lengkap"
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "SAVE",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.SemiBold
+
+                                // ✅ NIM - EDITABLE (User bisa mengisi/update)
+                                ProfileTextField(
+                                    label = "NIM / ID Mahasiswa",
+                                    value = nim,
+                                    onValueChange = { nim = it },
+                                    enabled = !isLoading,
+                                    placeholder = "Masukkan NIM"
+                                )
+
+                                // ✅ Program Studi - EDITABLE
+                                ProfileTextField(
+                                    label = "Program Studi",
+                                    value = prodi,
+                                    onValueChange = { prodi = it },
+                                    enabled = !isLoading,
+                                    placeholder = "Contoh: Teknik Informatika"
+                                )
+
+                                // ✅ Email - READ ONLY (dari Google Auth)
+                                ProfileTextField(
+                                    label = "Email",
+                                    value = email,
+                                    onValueChange = {},
+                                    enabled = false,
+                                    placeholder = ""
                                 )
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(32.dp))
 
-                    // Tombol Logout
-                    Button(
-                        onClick = onLogout,
-                        modifier = Modifier
-                            .align(Alignment.CenterHorizontally)
-                            .width(160.dp)
-                            .height(48.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.Red
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("LOGOUT", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        // Save Button
+                        Button(
+                            onClick = {
+                                // ⚠️ CATATAN: Backend hanya update `name` dan `prodi`
+                                // Field `id` (NIM) tidak bisa diupdate karena primary key
+                                // Tapi untuk UX, kita tetap biarkan user mengisi
+
+                                if (nama.trim().isEmpty()) {
+                                    Toast.makeText(context, "Nama tidak boleh kosong", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+
+                                if (prodi.trim().isEmpty()) {
+                                    Toast.makeText(context, "Program studi tidak boleh kosong", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+
+                                isLoading = true
+
+                                repository.updateProfile(
+                                    name = nama,
+                                    prodi = prodi,
+                                    onSuccess = { updatedUser ->
+                                        isLoading = false
+                                        Toast.makeText(
+                                            context,
+                                            "✅ Profil berhasil disimpan!",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+
+                                        // Update state dengan data terbaru
+                                        nama = updatedUser.name ?: ""
+                                        prodi = updatedUser.prodi ?: ""
+                                    },
+                                    onError = { errorMsg ->
+                                        isLoading = false
+                                        Toast.makeText(
+                                            context,
+                                            "❌ $errorMsg",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                )
+                            },
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .width(160.dp)
+                                .height(48.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF4A90E2)
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            enabled = !isLoading
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Row(
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Save,
+                                        contentDescription = "Save",
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "SAVE",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // Tombol Logout
+                        Button(
+                            onClick = onLogout,
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .width(160.dp)
+                                .height(48.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.Red
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("LOGOUT", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        Spacer(modifier = Modifier.height(24.dp))
                     }
-                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }
     }
 }
 
+// ✅ PROFILE TEXT FIELD (dengan placeholder support)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileTextField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    placeholder: String = ""
 ) {
     Column {
         Text(
@@ -277,13 +324,22 @@ fun ProfileTextField(
             value = value,
             onValueChange = onValueChange,
             modifier = Modifier.fillMaxWidth(),
+            placeholder = {
+                if (placeholder.isNotEmpty() && enabled) {
+                    Text(
+                        text = placeholder,
+                        color = Color.Gray.copy(alpha = 0.5f)
+                    )
+                }
+            },
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color(0xFF4A90E2),
                 unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f),
                 focusedContainerColor = Color.White,
                 unfocusedContainerColor = if (enabled) Color.White else Color.Gray.copy(alpha = 0.1f),
                 disabledContainerColor = Color.Gray.copy(alpha = 0.1f),
-                disabledBorderColor = Color.Gray.copy(alpha = 0.2f)
+                disabledBorderColor = Color.Gray.copy(alpha = 0.2f),
+                disabledTextColor = Color.Gray
             ),
             shape = RoundedCornerShape(8.dp),
             singleLine = true,

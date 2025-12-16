@@ -1,6 +1,8 @@
 package com.example.penjadwalan_sidang.screens.mahasiswa
 
 import android.util.Log
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -27,6 +29,7 @@ import com.example.penjadwalan_sidang.data.repository.ProfileRepository
 import com.example.penjadwalan_sidang.data.repository.ThesisRepository
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle as JavaTextStyle
 import java.util.*
 
@@ -91,6 +94,15 @@ fun DashboardScreen(
         )
     }
 
+    // Filter thesis yang sudah dijadwalkan untuk hari yang dipilih
+    val scheduledThesisForDate = remember(listPengajuan, selectedDate) {
+        listPengajuan.filter { thesis ->
+            thesis.scheduledAt != null &&
+                    thesis.status == "APPROVED" &&
+                    thesis.scheduledAt.startsWith(selectedDate.toString())
+        }
+    }
+
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
@@ -131,163 +143,93 @@ fun DashboardScreen(
                 .padding(padding)
                 .padding(horizontal = 16.dp)
         ) {
-            // Header dengan data real dari API
+            // ✅ HEADER KONSISTEN
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp, bottom = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        if (isLoadingProfile) {
-                            Text(
-                                text = "Loading...",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Mahasiswa",
-                                fontSize = 14.sp,
-                                color = Color.Gray
-                            )
-                        } else if (userProfile != null) {
-                            Text(
-                                text = userProfile!!.name ?: "User",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Mahasiswa",
-                                fontSize = 14.sp,
-                                color = Color.Gray
-                            )
-                        } else {
-                            Text(
-                                text = "User",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Mahasiswa",
-                                fontSize = 14.sp,
-                                color = Color.Gray
-                            )
-                        }
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(PrimaryColor)
-                            .clickable { showLogoutDialog = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (userProfile != null) {
-                                val name = userProfile!!.name ?: "U"
-                                val parts = name.split(" ")
-                                if (parts.size >= 2) {
-                                    "${parts[0].take(1)}${parts[1].take(1)}".uppercase()
-                                } else {
-                                    name.take(2).uppercase()
-                                }
-                            } else {
-                                "U"
-                            },
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-
-            // Calendar
-            item {
-                CalendarView(
-                    currentMonth = currentMonth,
-                    selectedDate = selectedDate,
-                    onMonthChange = { currentMonth = it },
-                    onDateSelected = { selectedDate = it }
+                UnifiedHeader(
+                    userProfile = userProfile,
+                    isLoading = isLoadingProfile,
+                    role = "Mahasiswa",
+                    onLogoutClick = { showLogoutDialog = true }
                 )
-                Spacer(modifier = Modifier.height(24.dp))
             }
 
-            // Agenda Header
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Agenda",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "More",
-                        tint = Color.Gray
-                    )
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-
-            // Agenda Card (Static - bisa diisi dari scheduledAt thesis nanti)
+            // ✅ KALENDER + AGENDA JADI SATU SECTION
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    elevation = CardDefaults.cardElevation(2.dp)
                 ) {
-                    // Cek apakah ada thesis yang sudah scheduled
-                    val scheduledThesis = listPengajuan.firstOrNull {
-                        it.scheduledAt != null && it.status == "APPROVED"
-                    }
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        // Kalender
+                        CalendarView(
+                            currentMonth = currentMonth,
+                            selectedDate = selectedDate,
+                            scheduledDates = listPengajuan
+                                .filter { it.scheduledAt != null && it.status == "APPROVED" }
+                                .mapNotNull {
+                                    try {
+                                        LocalDate.parse(it.scheduledAt!!.substring(0, 10))
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+                                },
+                            onMonthChange = { currentMonth = it },
+                            onDateSelected = { selectedDate = it }
+                        )
 
-                    if (scheduledThesis != null) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "Ujian Tugas Akhir",
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 16.sp
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Ruangan R.301",
-                                color = Color.Gray,
-                                fontSize = 14.sp
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                Text(
-                                    text = scheduledThesis.scheduledAt?.substring(11, 16) ?: "09:00",
-                                    color = Color.Gray,
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            contentAlignment = Alignment.Center
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // Divider
+                        HorizontalDivider(color = Color.Gray.copy(alpha = 0.2f))
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Agenda Header
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Belum ada jadwal sidang",
-                                color = Color.Gray,
-                                fontSize = 14.sp
+                                text = "Agenda",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
                             )
+                            Text(
+                                text = selectedDate.format(DateTimeFormatter.ofPattern("dd MMM yyyy", Locale("id"))),
+                                fontSize = 14.sp,
+                                color = Color.Gray
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Agenda Items
+                        if (scheduledThesisForDate.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Tidak ada agenda pada tanggal ini",
+                                    color = Color.Gray,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        } else {
+                            scheduledThesisForDate.forEach { thesis ->
+                                AgendaItem(thesis = thesis)
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(24.dp))
             }
 
             // Status Pengajuan Header
@@ -363,53 +305,59 @@ fun DashboardScreen(
             // Data dari API
             else {
                 items(listPengajuan, key = { it.id }) { thesis ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        elevation = CardDefaults.cardElevation(2.dp),
-                        shape = RoundedCornerShape(12.dp)
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn(tween(300)) + slideInVertically(tween(300)),
+                        exit = fadeOut(tween(300))
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = thesis.title,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            elevation = CardDefaults.cardElevation(2.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = thesis.title,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                // Status Badge
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(
-                                            when (thesis.status) {
-                                                "APPROVED" -> Color(0xFF4CAF50)
-                                                "REJECTED" -> Color(0xFFF44336)
-                                                else -> Color(0xFFFFC107)
-                                            }
-                                        )
-                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
+                                    // Status Badge
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(
+                                                when (thesis.status) {
+                                                    "APPROVED" -> Color(0xFF4CAF50)
+                                                    "REJECTED" -> Color(0xFFF44336)
+                                                    else -> Color(0xFFFFC107)
+                                                }
+                                            )
+                                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = thesis.status,
+                                            fontSize = 12.sp,
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    // Tanggal
                                     Text(
-                                        text = thesis.status,
+                                        text = thesis.createdAt.substring(0, 10),
                                         fontSize = 12.sp,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold
+                                        color = Color.Gray
                                     )
                                 }
-
-                                // Tanggal
-                                Text(
-                                    text = thesis.createdAt.substring(0, 10),
-                                    fontSize = 12.sp,
-                                    color = Color.Gray
-                                )
                             }
                         }
                     }
@@ -441,99 +389,216 @@ fun DashboardScreen(
     }
 }
 
+// ✅ HEADER KONSISTEN UNTUK SEMUA SCREEN
+@Composable
+fun UnifiedHeader(
+    userProfile: User?,
+    isLoading: Boolean,
+    role: String,
+    onLogoutClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            if (isLoading) {
+                Text(
+                    text = "Loading...",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = role,
+                    fontSize = 14.sp,
+                    color = Color.Gray
+                )
+            } else if (userProfile != null) {
+                Text(
+                    text = userProfile.name ?: "User",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = role,
+                    fontSize = 14.sp,
+                    color = Color.Gray
+                )
+            } else {
+                Text(
+                    text = "User",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = role,
+                    fontSize = 14.sp,
+                    color = Color.Gray
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(PrimaryColor)
+                .clickable { onLogoutClick() },
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = if (userProfile != null) {
+                    val name = userProfile.name ?: "U"
+                    val parts = name.split(" ")
+                    if (parts.size >= 2) {
+                        "${parts[0].take(1)}${parts[1].take(1)}".uppercase()
+                    } else {
+                        name.take(2).uppercase()
+                    }
+                } else {
+                    "U"
+                },
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+// ✅ AGENDA ITEM (TANPA RUANGAN)
+@Composable
+fun AgendaItem(thesis: Thesis) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5)),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(12.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Ujian Tugas Akhir",
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    color = Color.Black
+                )
+                Text(
+                    text = thesis.title,
+                    fontSize = 12.sp,
+                    color = Color.Gray,
+                    maxLines = 1
+                )
+            }
+
+            // Jam Sidang
+            Text(
+                text = thesis.scheduledAt?.substring(11, 16) ?: "09:00",
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                color = PrimaryColor
+            )
+        }
+    }
+}
+
 @Composable
 fun CalendarView(
     currentMonth: YearMonth,
     selectedDate: LocalDate,
+    scheduledDates: List<LocalDate>,
     onMonthChange: (YearMonth) -> Unit,
     onDateSelected: (LocalDate) -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = { onMonthChange(currentMonth.minusMonths(1)) }) {
-                    Icon(Icons.Default.ChevronLeft, "Previous month")
-                }
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = { onMonthChange(currentMonth.minusMonths(1)) }) {
+                Icon(Icons.Default.ChevronLeft, "Previous month", tint = Color.Black)
+            }
+            Text(
+                text = "${currentMonth.month.getDisplayName(JavaTextStyle.SHORT, Locale("id"))} ${currentMonth.year}",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            IconButton(onClick = { onMonthChange(currentMonth.plusMonths(1)) }) {
+                Icon(Icons.Default.ChevronRight, "Next month", tint = Color.Black)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            listOf("Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab").forEach { day ->
                 Text(
-                    text = "${currentMonth.month.getDisplayName(JavaTextStyle.SHORT, Locale.getDefault())} ${currentMonth.year}",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold
+                    text = day,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center,
+                    fontSize = 12.sp,
+                    color = Color.Gray
                 )
-                IconButton(onClick = { onMonthChange(currentMonth.plusMonths(1)) }) {
-                    Icon(Icons.Default.ChevronRight, "Next month")
-                }
             }
+        }
 
-            Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-            Row(modifier = Modifier.fillMaxWidth()) {
-                listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat").forEach { day ->
-                    Text(
-                        text = day,
-                        modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.Center,
-                        fontSize = 12.sp,
-                        color = Color.Gray
-                    )
-                }
-            }
+        val daysInMonth = currentMonth.lengthOfMonth()
+        val firstDayOfMonth = currentMonth.atDay(1).dayOfWeek.value % 7
+        val totalCells = ((daysInMonth + firstDayOfMonth + 6) / 7) * 7
 
-            Spacer(modifier = Modifier.height(8.dp))
+        Column {
+            for (week in 0 until (totalCells / 7)) {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    for (day in 0 until 7) {
+                        val cellIndex = week * 7 + day
+                        val dayOfMonth = cellIndex - firstDayOfMonth + 1
 
-            val daysInMonth = currentMonth.lengthOfMonth()
-            val firstDayOfMonth = currentMonth.atDay(1).dayOfWeek.value % 7
-            val totalCells = ((daysInMonth + firstDayOfMonth + 6) / 7) * 7
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .aspectRatio(1f)
+                                .padding(4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (dayOfMonth in 1..daysInMonth) {
+                                val date = currentMonth.atDay(dayOfMonth)
+                                val isSelected = date == selectedDate
+                                val isScheduled = scheduledDates.contains(date)
+                                val isToday = date == LocalDate.now()
 
-            Column {
-                for (week in 0 until (totalCells / 7)) {
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        for (day in 0 until 7) {
-                            val cellIndex = week * 7 + day
-                            val dayOfMonth = cellIndex - firstDayOfMonth + 1
-
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .aspectRatio(1f)
-                                    .padding(4.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (dayOfMonth in 1..daysInMonth) {
-                                    val date = currentMonth.atDay(dayOfMonth)
-                                    val isSelected = date == selectedDate
-                                    val isToday = date == LocalDate.now()
-
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .clip(CircleShape)
-                                            .background(
-                                                when {
-                                                    isSelected -> Color(0xFF8B5CF6)
-                                                    isToday -> Color(0xFFE0E7FF)
-                                                    else -> Color.Transparent
-                                                }
-                                            )
-                                            .clickable { onDateSelected(date) },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = dayOfMonth.toString().padStart(2, '0'),
-                                            fontSize = 14.sp,
-                                            color = when {
-                                                isSelected -> Color.White
-                                                else -> Color.Black
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape)
+                                        .background(
+                                            when {
+                                                isSelected -> PrimaryColor
+                                                isScheduled -> Color(0xFFFFE066)
+                                                isToday -> Color(0xFFE0E7FF)
+                                                else -> Color.Transparent
                                             }
                                         )
-                                    }
+                                        .clickable { onDateSelected(date) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = dayOfMonth.toString(),
+                                        fontSize = 14.sp,
+                                        fontWeight = if (isSelected || isScheduled) FontWeight.Bold else FontWeight.Normal,
+                                        color = when {
+                                            isSelected -> Color.White
+                                            else -> Color.Black
+                                        }
+                                    )
                                 }
                             }
                         }

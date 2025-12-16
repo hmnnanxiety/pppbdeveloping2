@@ -1,11 +1,12 @@
-
 package com.example.penjadwalan_sidang.screens.dosen
 
+import android.util.Log
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -13,18 +14,18 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.penjadwalan_sidang.data.model.Thesis
+import com.example.penjadwalan_sidang.data.model.User
+import com.example.penjadwalan_sidang.data.repository.DosenRepository
+import com.example.penjadwalan_sidang.data.repository.ProfileRepository
 import kotlin.math.ceil
 
-// --- Data Class ---
-
-
-// --- Konstanta Warna ---
 private val PrimaryColor = Color(0xFF4A90E2)
 private val BackgroundColor = Color(0xFFFFF5F5)
 
@@ -37,42 +38,72 @@ fun TerjadwalListDosenScreen(
     onNavigateToProfile: () -> Unit,
     onNavigateBack: () -> Unit,
 ) {
-    // Data dummy
-    val allJadwal = remember {
-        List(100) { index ->
-            JadwalSidang(
-                namaMahasiswa = "Budi Santoso",
-                nim = "201901001",
-                judulTA = "Analisis Jaringan Menggunakan Metode IDS",
-                tanggalSidang = "20-10-2025",
-                jamSidang = "09:00–11:00",
-                ruangan = "R. Sidang 1"
-            )
-        }
+    val context = LocalContext.current
+    val repository = remember { DosenRepository(context) }
+    val profileRepository = remember { ProfileRepository(context) }
+
+    // State untuk profile
+    var userProfile by remember { mutableStateOf<User?>(null) }
+    var isLoadingProfile by remember { mutableStateOf(true) }
+
+    // State untuk thesis list
+    var allJadwal by remember { mutableStateOf<List<Thesis>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // Load profile
+    LaunchedEffect(Unit) {
+        profileRepository.getMyProfile(
+            onSuccess = { user ->
+                userProfile = user
+                isLoadingProfile = false
+                Log.d("TERJADWAL_LIST", "Profile loaded: ${user.name}")
+            },
+            onError = { error ->
+                Log.e("TERJADWAL_LIST", "Failed to load profile: $error")
+                isLoadingProfile = false
+            }
+        )
     }
 
-    // Logika Pagination
+    // Load all thesis yang sudah dijadwalkan
+    LaunchedEffect(Unit) {
+        repository.getAllThesis(
+            onSuccess = { list ->
+                // Filter hanya yang sudah scheduled dan approved
+                allJadwal = list.filter {
+                    it.scheduledAt != null && it.status == "APPROVED"
+                }
+                isLoading = false
+                Log.d("TERJADWAL_LIST", "Loaded ${allJadwal.size} scheduled thesis")
+            },
+            onError = { error ->
+                errorMessage = error
+                isLoading = false
+                Log.e("TERJADWAL_LIST", "Error loading thesis: $error")
+            }
+        )
+    }
+
+    // Pagination
     val itemsPerPage = 15
-    val totalPages = ceil(allJadwal.size.toDouble() / itemsPerPage).toInt()
+    val totalPages = if (allJadwal.isEmpty()) 1 else ceil(allJadwal.size.toDouble() / itemsPerPage).toInt()
     var currentPage by remember { mutableStateOf(1) }
 
     val startIndex = (currentPage - 1) * itemsPerPage
     val endIndex = minOf(startIndex + itemsPerPage, allJadwal.size)
-    val currentPageData = allJadwal.subList(startIndex, endIndex)
+    val currentPageData = if (allJadwal.isNotEmpty()) allJadwal.subList(startIndex, endIndex) else emptyList()
 
-    // selectedTab: 2 adalah indeks untuk Kalender/Terjadwal
     var selectedTab by remember { mutableIntStateOf(2) }
-
 
     Scaffold(
         bottomBar = {
-            // Memanggil BottomBarDosen yang didefinisikan di file lain
             BottomBarDosen(selectedTab) { selected ->
                 selectedTab = selected
                 when (selected) {
                     0 -> onNavigateToDashboard()
                     1 -> onNavigateToPengajuan()
-                    2 -> {}
+                    2 -> {} // Stay here
                     3 -> onNavigateToProfile()
                 }
             }
@@ -84,95 +115,98 @@ fun TerjadwalListDosenScreen(
                 .background(BackgroundColor)
                 .padding(padding)
         ) {
+            // ✅ HEADER KONSISTEN
+            UnifiedDosenHeader(
+                userProfile = userProfile,
+                isLoading = isLoadingProfile
+            )
 
-            // Header Dosen (Mirip Dashboard)
-            DosenHeaderList(namaDosen = "Pak Afif", role = "Dosen")
+            if (isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = PrimaryColor)
+                }
+            } else if (errorMessage != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f)
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE))
+                    ) {
+                        Text(
+                            text = "⚠️ $errorMessage",
+                            color = Color(0xFFC62828),
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 16.dp)
+                        ) {
+                            Text(
+                                text = "Mahasiswa yang sudah dijadwalkan",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+                            TerjadwalTableHeader()
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                    }
 
-            // Konten Utama dengan LazyColumn
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(top = 16.dp)
-            ) {
+                    if (currentPageData.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("Belum ada jadwal", color = Color.Gray)
+                            }
+                        }
+                    } else {
+                        items(currentPageData, key = { it.id }) { thesis ->
+                            AnimatedVisibility(
+                                visible = true,
+                                enter = fadeIn(tween(300)) + slideInVertically(tween(300)),
+                                exit = fadeOut(tween(300))
+                            ) {
+                                TerjadwalListItem(thesis = thesis)
+                            }
+                        }
+                    }
 
-                // Judul Halaman
-                item {
-                    Text(
-                        text = "Mahasiswa yang sudah dijadwalkan",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
+                    item { Spacer(modifier = Modifier.height(16.dp)) }
                 }
 
-                // Header Tabel
-                item {
-                    TerjadwalTableHeader()
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-
-                // Daftar Item
-                items(currentPageData) { jadwal ->
-                    TerjadwalListItem(jadwal = jadwal)
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
+                PaginationBar(
+                    currentPage = currentPage,
+                    totalPages = totalPages,
+                    onPageChange = { newPage -> currentPage = newPage }
+                )
             }
-
-            // Pagination Bar
-            PaginationBar(
-                currentPage = currentPage,
-                totalPages = totalPages,
-                onPageChange = { newPage ->
-                    currentPage = newPage
-                }
-            )
-        }
-    }
-}
-
-// ===================================
-// KOMPONEN UI KHUSUS LAYAR INI
-// ===================================
-
-@Composable
-fun DosenHeaderList(namaDosen: String, role: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.White)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Logo atau Avatar (mirip dashboard)
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(PrimaryColor),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = namaDosen.split(" ").first().take(1) + namaDosen.split(" ").last().take(1),
-                color = Color.White,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column {
-            Text(text = namaDosen, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Text(text = role, color = Color.Gray, fontSize = 14.sp)
         }
     }
 }
 
 @Composable
 fun TerjadwalTableHeader() {
-    // Header tabel yang statis di atas daftar
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -187,30 +221,34 @@ fun TerjadwalTableHeader() {
 }
 
 @Composable
-fun TerjadwalListItem(jadwal: JadwalSidang) {
+fun TerjadwalListItem(thesis: Thesis) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
+            .padding(vertical = 8.dp, horizontal = 16.dp)
             .background(Color.White, shape = RoundedCornerShape(8.dp))
-            .padding(8.dp),
+            .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-
-        // ❌ BAGIAN AVATAR DIHAPUS UNTUK MEMBERIKAN RUANG KOSONG
-
         // Nama Mahasiswa
         Column(modifier = Modifier.weight(1.2f)) {
-            Text(jadwal.namaMahasiswa, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-            Text(jadwal.nim, fontSize = 11.sp, color = Color.Gray)
+            Text(
+                thesis.student?.name ?: "Unknown",
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp
+            )
+            Text(
+                thesis.student?.id?.take(10) ?: "-",
+                fontSize = 11.sp,
+                color = Color.Gray
+            )
         }
 
-        // ➡️ Spacer tambahan untuk memisahkan Nama dan Judul
         Spacer(modifier = Modifier.width(12.dp))
 
         // Judul TA
         Text(
-            jadwal.judulTA,
+            thesis.title,
             fontSize = 12.sp,
             color = Color.Black,
             modifier = Modifier.weight(1.5f),
@@ -218,12 +256,11 @@ fun TerjadwalListItem(jadwal: JadwalSidang) {
             overflow = TextOverflow.Ellipsis
         )
 
-        // ➡️ Spacer tambahan untuk memisahkan Judul dan Tanggal
         Spacer(modifier = Modifier.width(12.dp))
 
         // Tanggal Sidang
         Text(
-            jadwal.tanggalSidang,
+            thesis.scheduledAt?.substring(0, 10) ?: "-",
             fontSize = 12.sp,
             color = Color.Black,
             modifier = Modifier.weight(1f),
@@ -233,13 +270,12 @@ fun TerjadwalListItem(jadwal: JadwalSidang) {
 
         // Jam Sidang
         Text(
-            jadwal.jamSidang,
+            thesis.scheduledAt?.substring(11, 16) ?: "09:00",
             fontSize = 12.sp,
-            color = PrimaryColor, // Warna biru untuk jam sidang
+            color = PrimaryColor,
             modifier = Modifier.weight(1f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
     }
-    Spacer(modifier = Modifier.height(4.dp))
 }

@@ -1,5 +1,7 @@
 package com.example.penjadwalan_sidang.navigation
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -14,17 +16,44 @@ import com.example.penjadwalan_sidang.screens.dosen.TerjadwalListDosenScreen
 import com.example.penjadwalan_sidang.screens.dosen.PengajuanDetailScreen
 import com.example.penjadwalan_sidang.screens.dosen.JadwalSidangDosenScreen
 
+// ✅ KONSTANTA TRANSISI GLOBAL
+private const val TRANSITION_DURATION = 300
+
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun NavGraphDosen(navController: NavHostController, onLogout: () -> Unit) {
     NavHost(
         navController = navController,
         startDestination = "dashboard_dosen"
     ) {
-
-        // =====================================
-        // RUTE 1: DASHBOARD
-        // =====================================
-        composable("dashboard_dosen") {
+        // ✅ DASHBOARD DOSEN
+        composable(
+            "dashboard_dosen",
+            enterTransition = {
+                fadeIn(tween(TRANSITION_DURATION)) + slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            exitTransition = {
+                fadeOut(tween(TRANSITION_DURATION)) + slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            popEnterTransition = {
+                fadeIn(tween(TRANSITION_DURATION)) + slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            popExitTransition = {
+                fadeOut(tween(TRANSITION_DURATION)) + slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            }
+        ) {
             DashboardDosenScreen(
                 onNavigateToPengajuan = { navController.navigate("pengajuan_list") },
                 onNavigateToKalender = { navController.navigate("kalender_dosen") },
@@ -34,10 +63,34 @@ fun NavGraphDosen(navController: NavHostController, onLogout: () -> Unit) {
             )
         }
 
-        // =====================================
-        // RUTE 2: PENGAJUAN LIST
-        // =====================================
-        composable("pengajuan_list") {
+        // ✅ PENGAJUAN LIST
+        composable(
+            "pengajuan_list",
+            enterTransition = {
+                fadeIn(tween(TRANSITION_DURATION)) + slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            exitTransition = {
+                fadeOut(tween(TRANSITION_DURATION)) + slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            popEnterTransition = {
+                fadeIn(tween(TRANSITION_DURATION)) + slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            popExitTransition = {
+                fadeOut(tween(TRANSITION_DURATION)) + slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            }
+        ) {
             PengajuanListDosenScreen(
                 onNavigateToDashboard = { navController.navigate("dashboard_dosen") },
                 onNavigateToKalender = { navController.navigate("kalender_dosen") },
@@ -46,10 +99,34 @@ fun NavGraphDosen(navController: NavHostController, onLogout: () -> Unit) {
             )
         }
 
-        // =====================================
-        // RUTE 3: KALENDER DOSEN
-        // =====================================
-        composable("kalender_dosen") {
+        // ✅ KALENDER DOSEN
+        composable(
+            "kalender_dosen",
+            enterTransition = {
+                fadeIn(tween(TRANSITION_DURATION)) + slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            exitTransition = {
+                fadeOut(tween(TRANSITION_DURATION)) + slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            popEnterTransition = {
+                fadeIn(tween(TRANSITION_DURATION)) + slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            popExitTransition = {
+                fadeOut(tween(TRANSITION_DURATION)) + slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            }
+        ) {
             KalenderDosenScreen(
                 onNavigateToDashboard = { navController.navigate("dashboard_dosen") },
                 onNavigateToPengajuan = { navController.navigate("pengajuan_list") },
@@ -59,10 +136,34 @@ fun NavGraphDosen(navController: NavHostController, onLogout: () -> Unit) {
             )
         }
 
-        // =====================================
-        // RUTE 4: PROFIL DOSEN
-        // =====================================
-        composable("profil_dosen") {
+        // ✅ PROFIL DOSEN
+        composable(
+            "profil_dosen",
+            enterTransition = {
+                fadeIn(tween(TRANSITION_DURATION)) + slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            exitTransition = {
+                fadeOut(tween(TRANSITION_DURATION)) + slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            popEnterTransition = {
+                fadeIn(tween(TRANSITION_DURATION)) + slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            popExitTransition = {
+                fadeOut(tween(TRANSITION_DURATION)) + slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            }
+        ) {
             ProfileDosenScreen(
                 onNavigateToDashboard = { navController.navigate("dashboard_dosen") },
                 onNavigateToPengajuan = { navController.navigate("pengajuan_list") },
@@ -71,10 +172,34 @@ fun NavGraphDosen(navController: NavHostController, onLogout: () -> Unit) {
             )
         }
 
-        // =====================================
-        // RUTE 5: TERJADWAL LIST
-        // =====================================
-        composable("terjadwal_list") {
+        // ✅ TERJADWAL LIST
+        composable(
+            "terjadwal_list",
+            enterTransition = {
+                fadeIn(tween(TRANSITION_DURATION)) + slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            exitTransition = {
+                fadeOut(tween(TRANSITION_DURATION)) + slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            popEnterTransition = {
+                fadeIn(tween(TRANSITION_DURATION)) + slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            popExitTransition = {
+                fadeOut(tween(TRANSITION_DURATION)) + slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            }
+        ) {
             TerjadwalListDosenScreen(
                 onNavigateToDashboard = { navController.navigate("dashboard_dosen") },
                 onNavigateToPengajuan = { navController.navigate("pengajuan_list") },
@@ -84,40 +209,82 @@ fun NavGraphDosen(navController: NavHostController, onLogout: () -> Unit) {
             )
         }
 
-        // =====================================
-        // RUTE 6: DETAIL PENGAJUAN
-        // =====================================
+        // ✅ DETAIL PENGAJUAN
         composable(
             route = "pengajuan_detail/{pengajuanId}",
             arguments = listOf(
                 navArgument("pengajuanId") { type = NavType.StringType }
-            )
+            ),
+            enterTransition = {
+                fadeIn(tween(TRANSITION_DURATION)) + slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            exitTransition = {
+                fadeOut(tween(TRANSITION_DURATION)) + slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            popEnterTransition = {
+                fadeIn(tween(TRANSITION_DURATION)) + slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            popExitTransition = {
+                fadeOut(tween(TRANSITION_DURATION)) + slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            }
         ) { backStackEntry ->
             val pengajuanId = backStackEntry.arguments?.getString("pengajuanId") ?: ""
 
             PengajuanDetailScreen(
                 id = pengajuanId,
                 onNavigateBack = { navController.popBackStack() },
-                // Meneruskan navigasi ke halaman jadwal dengan ID
                 onNavigateToJadwal = { mahasiswaId -> navController.navigate("jadwal_sidang/$mahasiswaId") }
             )
         }
 
-        // =====================================
-        // RUTE 7: JADWAL SIDANG DOSEN
-        // =====================================
+        // ✅ JADWAL SIDANG DOSEN
         composable(
             route = "jadwal_sidang/{mahasiswaId}",
             arguments = listOf(
                 navArgument("mahasiswaId") { type = NavType.StringType }
-            )
+            ),
+            enterTransition = {
+                fadeIn(tween(TRANSITION_DURATION)) + slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            exitTransition = {
+                fadeOut(tween(TRANSITION_DURATION)) + slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            popEnterTransition = {
+                fadeIn(tween(TRANSITION_DURATION)) + slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            },
+            popExitTransition = {
+                fadeOut(tween(TRANSITION_DURATION)) + slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(TRANSITION_DURATION)
+                )
+            }
         ) { backStackEntry ->
             val mahasiswaId = backStackEntry.arguments?.getString("mahasiswaId") ?: ""
 
             JadwalSidangDosenScreen(
                 mahasiswaId = mahasiswaId,
                 onNavigateBack = { navController.popBackStack() },
-                // Menerima 3 argumen (Tanggal, Jam, Ruangan) dan menavigasi kembali ke Dashboard
                 onJadwalConfirmed = { _, _, _ ->
                     navController.navigate("dashboard_dosen") {
                         popUpTo("dashboard_dosen") { inclusive = true }

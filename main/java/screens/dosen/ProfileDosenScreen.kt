@@ -93,8 +93,6 @@ fun ProfileDosenScreen(
                     .verticalScroll(rememberScrollState())
             ) {
 
-                HeaderProfile()
-
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
