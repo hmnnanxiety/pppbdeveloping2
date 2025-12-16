@@ -4,17 +4,9 @@ object Constants {
     // Base URL Backend
     const val BASE_URL = "https://simpensi-api.afif.dev/"
 
-    // 🔥 CRITICAL: Ini harus WEB CLIENT ID dari Google Cloud Console
-    // BUKAN Android Client ID!
-    //
-    // Cara dapetin:
-    // 1. https://console.cloud.google.com
-    // 2. APIs & Services → Credentials
-    // 3. Cari yang type "Web application"
-    // 4. Copy CLIENT ID nya
-    //
-    // Format: xxxxx.apps.googleusercontent.com
-    const val GOOGLE_CLIENT_ID="191478654932-3k8448tve2cpp7o9dh7ed9vmg2ti6sbc.apps.googleusercontent.com"
+    // ✅ PAKAI WEB CLIENT ID DARI BACKEND (.env)
+    // INI YANG BENAR! Backend expect Client ID ini
+    const val GOOGLE_CLIENT_ID = "191478654932-24j21jk2pmtnvk42e7qrbt1c2ufoifnd.apps.googleusercontent.com"
 
     // Endpoint URLs
     const val HEALTH = "health"
