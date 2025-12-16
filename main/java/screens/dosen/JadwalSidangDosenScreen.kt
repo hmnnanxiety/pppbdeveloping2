@@ -1,5 +1,7 @@
 package com.example.penjadwalan_sidang.screens.dosen
 
+import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,36 +15,42 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.penjadwalan_sidang.data.repository.DosenRepository
 import java.time.LocalDate
 import java.time.YearMonth
-import java.time.format.TextStyle
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle as JavaTextStyle
 import java.util.*
 import kotlin.math.ceil
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.ui.draw.clip
 
-// --- Konstanta Warna ---
 private val PrimaryColor = Color(0xFF4A90E2)
 private val BackgroundColor = Color(0xFFFFF5F5)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun JadwalSidangDosenScreen(
-    mahasiswaId: String, // ID Mahasiswa yang disetujui
+    mahasiswaId: String,
     onNavigateBack: () -> Unit,
-    onJadwalConfirmed: (LocalDate, String, String) -> Unit // Tanggal, Jam, Ruangan
+    onJadwalConfirmed: (LocalDate, String, String) -> Unit
 ) {
+    val context = LocalContext.current
+    val dosenRepo = remember { DosenRepository(context) }
+
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
-    var selectedHour by remember { mutableStateOf(10) } // Default jam 10
-    var selectedMinute by remember { mutableStateOf(0) } // Default menit 00
-
-    // Mock Ruangan
+    var selectedHour by remember { mutableIntStateOf(10) }
+    var selectedMinute by remember { mutableIntStateOf(0) }
     var selectedRuangan by remember { mutableStateOf("R.301") }
+    var isSubmitting by remember { mutableStateOf(false) }
+
     val ruanganOptions = listOf("R.301", "R.302", "Lab 1", "Lab 2")
 
     Scaffold(
@@ -65,8 +73,6 @@ fun JadwalSidangDosenScreen(
                 .padding(padding)
                 .padding(16.dp)
         ) {
-
-            // --- Pilih Tanggal Sidang ---
             Text(
                 text = "Pilih Tanggal Sidang",
                 fontSize = 18.sp,
@@ -82,12 +88,10 @@ fun JadwalSidangDosenScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // --- Pilih Jam Sidang dan Ruangan ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Pilih Jam Sidang
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Pilih Jam Sidang",
@@ -105,7 +109,6 @@ fun JadwalSidangDosenScreen(
 
                 Spacer(modifier = Modifier.width(16.dp))
 
-                // Pilih Ruangan
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Pilih Ruangan",
@@ -123,30 +126,79 @@ fun JadwalSidangDosenScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Tombol Konfirmasi
             Button(
                 onClick = {
-                    val formattedTime = String.format("%02d:%02d", selectedHour, selectedMinute)
-                    onJadwalConfirmed(selectedDate, formattedTime, selectedRuangan)
+                    // Validasi tanggal harus masa depan
+                    if (selectedDate.isBefore(LocalDate.now())) {
+                        Toast.makeText(
+                            context,
+                            "❌ Tanggal harus di masa depan",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        return@Button
+                    }
+
+                    isSubmitting = true
+
+                    // Format tanggal ke ISO 8601 dengan timezone
+                    val dateTime = selectedDate.atTime(selectedHour, selectedMinute)
+                    val zonedDateTime = dateTime.atZone(ZoneId.systemDefault())
+                    val isoString = zonedDateTime.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+
+                    Log.d("JADWAL_SIDANG", "Submitting schedule: $isoString for thesis ID: $mahasiswaId")
+
+                    dosenRepo.scheduleThesis(
+                        id = mahasiswaId,
+                        date = isoString,
+                        onSuccess = { updatedThesis ->
+                            Toast.makeText(
+                                context,
+                                "✅ Jadwal sidang berhasil disimpan!",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            isSubmitting = false
+
+                            val formattedTime = String.format("%02d:%02d", selectedHour, selectedMinute)
+                            onJadwalConfirmed(selectedDate, formattedTime, selectedRuangan)
+                        },
+                        onError = { error ->
+                            Toast.makeText(
+                                context,
+                                "❌ $error",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            isSubmitting = false
+                            Log.e("JADWAL_SIDANG", "Failed to schedule: $error")
+                        }
+                    )
                 },
                 modifier = Modifier
                     .align(Alignment.End)
                     .width(150.dp)
                     .height(48.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor),
-                shape = RoundedCornerShape(8.dp)
+                colors = ButtonDefaults.buttonColors(PrimaryColor),
+                shape = RoundedCornerShape(8.dp),
+                enabled = !isSubmitting
             ) {
-                Icon(Icons.Default.CalendarMonth, contentDescription = "Jadwalkan", modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Jadwalkan")
+                if (isSubmitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.CalendarMonth,
+                        contentDescription = "Jadwalkan",
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Jadwalkan")
+                }
             }
         }
     }
 }
-
-// ===================================
-// KOMPONEN KALENDER SIDANG (DIBUAT ULANG KHUSUS PAGE INI)
-// ===================================
 
 @Composable
 fun ScheduleCalendarView(
@@ -157,11 +209,10 @@ fun ScheduleCalendarView(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(Color.White),
         shape = RoundedCornerShape(12.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Header bulan dan tahun
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -171,20 +222,17 @@ fun ScheduleCalendarView(
                     Icon(Icons.Default.ArrowBack, "Previous month")
                 }
                 Text(
-                    text = "${currentMonth.month.getDisplayName(TextStyle.SHORT, Locale("id", "ID"))} ${currentMonth.year}",
+                    text = "${currentMonth.month.getDisplayName(JavaTextStyle.SHORT, Locale("id", "ID"))} ${currentMonth.year}",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold
                 )
-                // Perbaikan
                 IconButton(onClick = { onMonthChange(currentMonth.plusMonths(1)) }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowForward, "Next month")
                 }
-
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Nama hari (SUN, MON, ...)
             Row(modifier = Modifier.fillMaxWidth()) {
                 listOf("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT").forEach { day ->
                     Text(
@@ -197,7 +245,6 @@ fun ScheduleCalendarView(
                 }
             }
 
-            // Tanggal
             val daysInMonth = currentMonth.lengthOfMonth()
             val firstDayOfMonth = currentMonth.atDay(1).dayOfWeek.value % 7
             val totalCells = ceil((daysInMonth + firstDayOfMonth) / 7.0).toInt() * 7
@@ -219,34 +266,33 @@ fun ScheduleCalendarView(
                                 if (dayOfMonth in 1..daysInMonth) {
                                     val date = currentMonth.atDay(dayOfMonth)
                                     val isSelected = date == selectedDate
+                                    val isPast = date.isBefore(LocalDate.now())
 
-                                    Column(
+                                    Box(
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .clip(RoundedCornerShape(8.dp))
-                                            .background(if (isSelected) PrimaryColor.copy(alpha = 0.2f) else Color.Transparent)
-                                            .clickable { onDateSelected(date) }
+                                            .background(
+                                                when {
+                                                    isSelected -> PrimaryColor.copy(alpha = 0.2f)
+                                                    isPast -> Color.Gray.copy(alpha = 0.1f)
+                                                    else -> Color.Transparent
+                                                }
+                                            )
+                                            .clickable(enabled = !isPast) { onDateSelected(date) }
                                             .padding(4.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally
+                                        contentAlignment = Alignment.Center
                                     ) {
                                         Text(
                                             text = dayOfMonth.toString(),
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (isSelected) PrimaryColor else Color.Black
+                                            color = when {
+                                                isPast -> Color.Gray
+                                                isSelected -> PrimaryColor
+                                                else -> Color.Black
+                                            }
                                         )
-                                        // Mock indikator jadwal (sesuai desain)
-                                        if (date.dayOfMonth % 5 == 0) {
-                                            Text(
-                                                text = "Ujian TA",
-                                                fontSize = 8.sp,
-                                                color = Color.White,
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(4.dp))
-                                                    .background(Color(0xFF8B5CF6))
-                                                    .padding(horizontal = 4.dp, vertical = 1.dp)
-                                            )
-                                        }
                                     }
                                 }
                             }
@@ -258,9 +304,6 @@ fun ScheduleCalendarView(
     }
 }
 
-// ===================================
-// KOMPONEN TIME PICKER (Sesuai Desain "24 Hours")
-// ===================================
 @Composable
 fun TimePickerView(
     selectedHour: Int,
@@ -269,15 +312,19 @@ fun TimePickerView(
     onMinuteChange: (Int) -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().height(200.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(200.dp),
+        colors = CardDefaults.cardColors(Color.White),
         shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxSize().padding(16.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
         ) {
             Text(
                 text = "24 Hours",
@@ -285,37 +332,28 @@ fun TimePickerView(
                 color = Color.Gray,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Hour Picker (Simple Text/Simulasi Picker)
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = String.format("%02d", selectedHour),
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
                     color = PrimaryColor,
                     modifier = Modifier.clickable {
-                        // Simulasi logic picker (bisa diganti dengan komponen picker sungguhan)
                         onHourChange((selectedHour + 1) % 24)
                     }
                 )
-
                 Text(
                     text = ":",
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.Black,
                     modifier = Modifier.padding(horizontal = 8.dp)
                 )
-
-                // Minute Picker (Simple Text/Simulasi Picker)
                 Text(
                     text = String.format("%02d", selectedMinute),
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
                     color = PrimaryColor,
                     modifier = Modifier.clickable {
-                        // Simulasi logic picker
                         onMinuteChange((selectedMinute + 5) % 60)
                     }
                 )
@@ -330,9 +368,6 @@ fun TimePickerView(
     }
 }
 
-// ===================================
-// KOMPONEN RUANGAN PICKER
-// ===================================
 @Composable
 fun RuanganPicker(
     selectedRuangan: String,
@@ -340,13 +375,17 @@ fun RuanganPicker(
     onRuanganSelected: (String) -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().height(200.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(200.dp),
+        colors = CardDefaults.cardColors(Color.White),
         shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {

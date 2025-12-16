@@ -32,7 +32,13 @@ fun LoginScreen(
     val context = LocalContext.current
     val sessionManager = remember { SessionManager(context) }
 
-    // Konfigurasi Google Sign In
+    // 🔥 ENHANCED LOGGING
+    LaunchedEffect(Unit) {
+        Log.d("LOGIN_INIT", "=== LOGIN SCREEN INITIALIZED ===")
+        Log.d("LOGIN_INIT", "Google Client ID: ${Constants.GOOGLE_CLIENT_ID}")
+        Log.d("LOGIN_INIT", "Base URL: ${Constants.BASE_URL}")
+    }
+
     val gso = remember {
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken(Constants.GOOGLE_CLIENT_ID)
@@ -47,52 +53,99 @@ fun LoginScreen(
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        Log.d("LOGIN_DEBUG", "Result Code: ${result.resultCode}")
+        Log.d("LOGIN_RESULT", "=== ACTIVITY RESULT RECEIVED ===")
+        Log.d("LOGIN_RESULT", "Result Code: ${result.resultCode}")
+        Log.d("LOGIN_RESULT", "RESULT_OK: ${Activity.RESULT_OK}")
+        Log.d("LOGIN_RESULT", "RESULT_CANCELED: ${Activity.RESULT_CANCELED}")
 
-        if (result.resultCode == Activity.RESULT_OK) {
-            Log.d("LOGIN_DEBUG", "Result OK. Mencoba ambil data akun...")
+        when (result.resultCode) {
+            Activity.RESULT_OK -> {
+                Log.d("LOGIN_SUCCESS", "✅ User selected account")
 
-            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-            try {
-                val account = task.getResult(ApiException::class.java)
-                val idToken = account.idToken
+                val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
 
-                Log.d("LOGIN_DEBUG", "Token didapat: $idToken")
+                try {
+                    val account = task.getResult(ApiException::class.java)
+                    val idToken = account.idToken
+                    val email = account.email
+                    val displayName = account.displayName
 
-                if (idToken != null) {
-                    val email = account.email ?: ""
+                    Log.d("LOGIN_SUCCESS", "Account email: $email")
+                    Log.d("LOGIN_SUCCESS", "Display name: $displayName")
+                    Log.d("LOGIN_SUCCESS", "Token exists: ${idToken != null}")
+                    Log.d("LOGIN_SUCCESS", "Token preview: ${idToken?.take(30)}...")
 
-                    // Tentukan role berdasarkan email
-                    val role = if (email.contains("dosen") || email.contains("afif")) {
-                        "DOSEN"
+                    if (idToken != null) {
+                        // Determine role dari email
+                        val role = if (email?.contains("dosen", ignoreCase = true) == true ||
+                            email?.contains("afif", ignoreCase = true) == true) {
+                            "DOSEN"
+                        } else {
+                            "MAHASISWA"
+                        }
+
+                        Log.d("LOGIN_SUCCESS", "Determined role: $role")
+
+                        // Save session
+                        sessionManager.saveSession(idToken, role)
+
+                        Toast.makeText(
+                            context,
+                            "✅ Login berhasil sebagai $role",
+                            Toast.LENGTH_SHORT
+                        ).show()
+
+                        // Navigate
+                        if (role == "DOSEN") {
+                            onLoginDosen()
+                        } else {
+                            onLoginMahasiswa()
+                        }
                     } else {
-                        "MAHASISWA"
+                        Log.e("LOGIN_ERROR", "❌ ID Token is NULL")
+                        Toast.makeText(
+                            context,
+                            "❌ Gagal mendapatkan token. Coba lagi.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                } catch (e: ApiException) {
+                    Log.e("LOGIN_ERROR", "❌ ApiException: ${e.statusCode}")
+                    Log.e("LOGIN_ERROR", "Message: ${e.message}")
+                    Log.e("LOGIN_ERROR", "Stack trace:", e)
+
+                    val errorMessage = when (e.statusCode) {
+                        10 -> "Developer error: Check google-services.json"
+                        12501 -> "Login dibatalkan oleh user"
+                        12500 -> "Sign-in failed: Check SHA-1 fingerprint"
+                        else -> "Error ${e.statusCode}: ${e.message}"
                     }
 
-                    Log.d("LOGIN_DEBUG", "Email: $email, Role: $role")
-
-                    // Simpan session (cuma di SessionManager aja, gak pakai UserSession lagi!)
-                    sessionManager.saveSession(idToken, role)
-
-                    // Navigate
-                    if (role == "DOSEN") {
-                        Toast.makeText(context, "Login Dosen Berhasil!", Toast.LENGTH_SHORT).show()
-                        onLoginDosen()
-                    } else {
-                        Toast.makeText(context, "Login Mahasiswa Berhasil!", Toast.LENGTH_SHORT).show()
-                        onLoginMahasiswa()
-                    }
-                } else {
-                    Log.e("LOGIN_DEBUG", "Token KOSONG (Null)")
-                    Toast.makeText(context, "Gagal: Token Google Kosong", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        context,
+                        "❌ $errorMessage",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
-            } catch (e: ApiException) {
-                Log.e("LOGIN_DEBUG", "Google Error Code: ${e.statusCode}")
-                Toast.makeText(context, "Google Error: ${e.statusCode}", Toast.LENGTH_LONG).show()
             }
-        } else {
-            Log.e("LOGIN_DEBUG", "Login Dibatalkan / Result Canceled")
-            Toast.makeText(context, "Login Dibatalkan", Toast.LENGTH_SHORT).show()
+
+            Activity.RESULT_CANCELED -> {
+                Log.w("LOGIN_CANCELED", "⚠️ User cancelled sign-in")
+                Toast.makeText(
+                    context,
+                    "Login dibatalkan",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+
+            else -> {
+                Log.e("LOGIN_ERROR", "❌ Unknown result code: ${result.resultCode}")
+                Toast.makeText(
+                    context,
+                    "❌ Login gagal (code: ${result.resultCode})",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
     }
 
@@ -123,15 +176,35 @@ fun LoginScreen(
 
                 Button(
                     onClick = {
-                        val signInIntent = googleSignInClient.signInIntent
-                        launcher.launch(signInIntent)
+                        Log.d("LOGIN_CLICK", "🔘 Login button clicked")
+
+                        // Sign out dulu untuk clear cache
+                        googleSignInClient.signOut().addOnCompleteListener {
+                            Log.d("LOGIN_CLICK", "Previous account signed out")
+
+                            // Launch sign-in
+                            val signInIntent = googleSignInClient.signInIntent
+                            Log.d("LOGIN_CLICK", "Launching Google Sign-In Intent")
+                            launcher.launch(signInIntent)
+                        }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4285F4))
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF4285F4)
+                    )
                 ) {
-                    Text("Login dengan Google UGM")
+                    Text("Login dengan Google UGM", fontSize = 16.sp)
+                }
+
+                // Debug info (remove in production)
+                if (Constants.BASE_URL.contains("localhost")) {
+                    Text(
+                        text = "⚠️ DEV MODE",
+                        fontSize = 10.sp,
+                        color = Color.Red
+                    )
                 }
             }
         }

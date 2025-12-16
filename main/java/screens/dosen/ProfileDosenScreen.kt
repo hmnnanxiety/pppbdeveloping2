@@ -1,5 +1,7 @@
 package com.example.penjadwalan_sidang.screens.dosen
 
+import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -14,16 +16,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.penjadwalan_sidang.screens.dosen.BottomBarDosen // Asumsi BottomBarDosen diimpor dari DashboardDosenScreen.kt
+import com.example.penjadwalan_sidang.data.model.User
+import com.example.penjadwalan_sidang.data.repository.ProfileRepository
 
-// --- Konstanta Warna ---
 private val PrimaryColor = Color(0xFF4A90E2)
 private val BackgroundColor = Color(0xFFFFF5F5)
 
-// Mock Data untuk Dropdown
 private val mockProgramStudi = listOf("Manajemen Informatika", "Sistem Informasi", "Teknik Komputer")
 private val mockJurusan = listOf("Teknologi Informasi", "Manajemen Bisnis", "Akuntansi")
 
@@ -34,20 +36,41 @@ fun ProfileDosenScreen(
     onNavigateToPengajuan: () -> Unit,
     onNavigateToKalender: () -> Unit,
     onNavigateBack: () -> Unit,
-    // Note: Karena ini adalah halaman Profil, tombol Profil akan tetap di halaman ini.
 ) {
-    // 🔑 State untuk Form
-    var nama by remember { mutableStateOf("Andrean Ramadani") }
-    var nip by remember { mutableStateOf("210401010") }
-    var email by remember { mutableStateOf("emaiDosen@gmail.com") }
-    var noTelepon by remember { mutableStateOf("08123456789") }
+    val context = LocalContext.current
+    val profileRepo = remember { ProfileRepository(context) }
 
-    // 🔑 State untuk Dropdown
+    var profile by remember { mutableStateOf<User?>(null) }
+    var isLoadingProfile by remember { mutableStateOf(true) }
+    var isSubmitting by remember { mutableStateOf(false) }
+
+    var nama by remember { mutableStateOf("") }
+    var nip by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var noTelepon by remember { mutableStateOf("") }
     var selectedProdi by remember { mutableStateOf(mockProgramStudi[0]) }
     var selectedJurusan by remember { mutableStateOf(mockJurusan[0]) }
+    var selectedTab by remember { mutableIntStateOf(3) }
 
-    // 🔑 State untuk Bottom Bar
-    var selectedTab by remember { mutableIntStateOf(3) } // ⬅️ Index 3 untuk Profil
+    // Load profile
+    LaunchedEffect(Unit) {
+        profileRepo.getMyProfile(
+            onSuccess = { user ->
+                profile = user
+                nama = user.name ?: ""
+                nip = user.id
+                email = user.email
+                selectedProdi = user.prodi ?: mockProgramStudi[0]
+                isLoadingProfile = false
+                Log.d("PROFILE_DOSEN", "Profile loaded: ${user.name}")
+            },
+            onError = { error ->
+                Toast.makeText(context, "⚠️ Gagal memuat profil: $error", Toast.LENGTH_SHORT).show()
+                isLoadingProfile = false
+                Log.e("PROFILE_DOSEN", "Failed to load: $error")
+            }
+        )
+    }
 
     Scaffold(
         bottomBar = {
@@ -57,103 +80,169 @@ fun ProfileDosenScreen(
                     0 -> onNavigateToDashboard()
                     1 -> onNavigateToPengajuan()
                     2 -> onNavigateToKalender()
-                    3 -> {/* Stay on Profile */}
+                    3 -> {}
                 }
             }
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(BackgroundColor)
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-        ) {
-
-            // ➡️ Header Profile (Menggunakan komponen yang disederhanakan dari KalenderDosenScreen)
-            HeaderProfile()
-
-            // Konten Form Utama
-            Card(
+        if (isLoadingProfile) {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    .fillMaxSize()
+                    .background(BackgroundColor)
+                    .padding(padding),
+                contentAlignment = Alignment.Center
             ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                CircularProgressIndicator(color = PrimaryColor)
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(BackgroundColor)
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                HeaderProfile()
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(Color.White),
+                    elevation = CardDefaults.cardElevation(4.dp)
                 ) {
-                    Text(
-                        text = "Profil",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // 1. Nama
-                    FormInputField(label = "Nama", value = nama, onValueChange = { nama = it })
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // 2. NIP
-                    FormInputField(label = "NIP", value = nip, onValueChange = { nip = it }, readOnly = true)
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // 3. Program Studi (Dropdown)
-                    DropdownInputField(
-                        label = "Program Studi",
-                        selectedValue = selectedProdi,
-                        options = mockProgramStudi,
-                        onOptionSelected = { selectedProdi = it }
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // 4. Jurusan (Dropdown)
-                    DropdownInputField(
-                        label = "Jurusan",
-                        selectedValue = selectedJurusan,
-                        options = mockJurusan,
-                        onOptionSelected = { selectedJurusan = it }
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // 5. Email
-                    FormInputField(label = "Email", value = email, onValueChange = { email = it })
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // 6. No Telepon
-                    FormInputField(label = "No Telepon", value = noTelepon, onValueChange = { noTelepon = it })
-                    Spacer(modifier = Modifier.height(32.dp))
-
-                    // Tombol SAVE
-                    Button(
-                        onClick = {
-                            // TODO: Implementasi logika penyimpanan data profil
-                            println("Data Saved: $nama, $nip, $selectedProdi, $selectedJurusan, $email, $noTelepon")
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp),
-                        colors = ButtonDefaults.buttonColors(PrimaryColor),
-                        shape = RoundedCornerShape(12.dp)
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Icon(Icons.Default.Save, contentDescription = "Save", modifier = Modifier.size(24.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "SAVE", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(
+                            text = "Profil",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        FormInputField(
+                            label = "Nama",
+                            value = nama,
+                            onValueChange = { nama = it }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        FormInputField(
+                            label = "NIP",
+                            value = nip,
+                            onValueChange = {},
+                            readOnly = true
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        DropdownInputField(
+                            label = "Program Studi",
+                            selectedValue = selectedProdi,
+                            options = mockProgramStudi,
+                            onOptionSelected = { selectedProdi = it }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        DropdownInputField(
+                            label = "Jurusan",
+                            selectedValue = selectedJurusan,
+                            options = mockJurusan,
+                            onOptionSelected = { selectedJurusan = it }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        FormInputField(
+                            label = "Email",
+                            value = email,
+                            onValueChange = {},
+                            readOnly = true
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        FormInputField(
+                            label = "No Telepon",
+                            value = noTelepon,
+                            onValueChange = { noTelepon = it }
+                        )
+                        Spacer(modifier = Modifier.height(32.dp))
+
+                        Button(
+                            onClick = {
+                                if (nama.trim().length !in 2..100) {
+                                    Toast.makeText(
+                                        context,
+                                        "Nama harus 2-100 karakter",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    return@Button
+                                }
+
+                                isSubmitting = true
+
+                                profileRepo.updateProfile(
+                                    name = nama,
+                                    prodi = selectedProdi,
+                                    onSuccess = { updatedUser ->
+                                        Toast.makeText(
+                                            context,
+                                            "✅ Profil berhasil disimpan!",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        profile = updatedUser
+                                        nama = updatedUser.name ?: ""
+                                        isSubmitting = false
+                                        Log.d("PROFILE_DOSEN", "Profile updated successfully")
+                                    },
+                                    onError = { error ->
+                                        Toast.makeText(
+                                            context,
+                                            "❌ $error",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                        isSubmitting = false
+                                        Log.e("PROFILE_DOSEN", "Failed to update: $error")
+                                    }
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            colors = ButtonDefaults.buttonColors(PrimaryColor),
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isSubmitting
+                        ) {
+                            if (isSubmitting) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.Save,
+                                    contentDescription = "Save",
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "SAVE",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 }
+                Spacer(modifier = Modifier.height(50.dp))
             }
-            Spacer(modifier = Modifier.height(50.dp))
         }
     }
 }
-
-// ===================================
-// KOMPONEN PENDUKUNG FORM
-// ===================================
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -172,10 +261,12 @@ fun FormInputField(
             readOnly = readOnly,
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
-            colors = TextFieldDefaults.outlinedTextFieldColors(
+            colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = PrimaryColor,
                 unfocusedBorderColor = Color.LightGray,
-                containerColor = Color.White
+                focusedContainerColor = Color.White,
+                unfocusedContainerColor = if (readOnly) Color.Gray.copy(alpha = 0.1f) else Color.White,
+                disabledContainerColor = Color.Gray.copy(alpha = 0.1f)
             ),
             shape = RoundedCornerShape(12.dp)
         )
@@ -199,19 +290,20 @@ fun DropdownInputField(
         Box(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = selectedValue,
-                onValueChange = {}, // Tidak diubah manual
+                onValueChange = {},
                 readOnly = true,
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { expanded = true }, // Klik membuka dropdown
+                    .clickable { expanded = true },
                 trailingIcon = {
                     Icon(Icons.Filled.ArrowDropDown, contentDescription = "Dropdown")
                 },
-                colors = TextFieldDefaults.outlinedTextFieldColors(
+                colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = PrimaryColor,
                     unfocusedBorderColor = Color.LightGray,
-                    containerColor = Color.White
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color.White
                 ),
                 shape = RoundedCornerShape(12.dp)
             )
@@ -219,13 +311,13 @@ fun DropdownInputField(
             DropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },
-                modifier = Modifier.fillMaxWidth(0.9f) // Menyesuaikan lebar
+                modifier = Modifier.fillMaxWidth(0.9f)
             ) {
-                options.forEach { selectionOption ->
+                options.forEach { option ->
                     DropdownMenuItem(
-                        text = { Text(selectionOption) },
+                        text = { Text(option) },
                         onClick = {
-                            onOptionSelected(selectionOption)
+                            onOptionSelected(option)
                             expanded = false
                         }
                     )
@@ -234,4 +326,3 @@ fun DropdownInputField(
         }
     }
 }
-

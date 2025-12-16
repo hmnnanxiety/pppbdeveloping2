@@ -1,9 +1,7 @@
 package com.example.penjadwalan_sidang.screens.dosen
-import com.example.penjadwalan_sidang.FakeData
-import com.example.penjadwalan_sidang.PengajuanMahasiswa
-import android.widget.Toast
+
+import android.util.Log
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,13 +20,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.penjadwalan_sidang.data.model.Thesis
+import com.example.penjadwalan_sidang.data.model.User
+import com.example.penjadwalan_sidang.data.repository.DosenRepository
+import com.example.penjadwalan_sidang.data.repository.ProfileRepository
 import kotlin.math.ceil
-
-
 
 private val PrimaryColor = Color(0xFF4A90E2)
 private val BackgroundColor = Color(0xFFFFF5F5)
-private val ActionColor = Color(0xFF4CAF50) // Mengubah AccentColor menjadi ActionColor (lebih jelas)
+private val ActionColor = Color(0xFF4CAF50)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,18 +39,52 @@ fun PengajuanListDosenScreen(
     onNavigateToDetail: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
-    var selectedTab by remember { mutableStateOf(1) } // Default tab ke Pengajuan
+    var selectedTab by remember { mutableIntStateOf(1) }
 
-    // Ambil data langsung dari FakeData. Filter hanya yang statusnya "Menunggu" jika mau
-    val allPengajuan = FakeData.pengajuanList
+    val dosenRepo = remember { DosenRepository(context) }
+    val profileRepo = remember { ProfileRepository(context) }
+
+    var dosenProfile by remember { mutableStateOf<User?>(null) }
+    var allThesis by remember { mutableStateOf<List<Thesis>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val itemsPerPage = 15
-    val totalPages = ceil(allPengajuan.size.toDouble() / itemsPerPage).toInt()
-    var currentPage by remember { mutableStateOf(1) }
+    var currentPage by remember { mutableIntStateOf(1) }
 
-    val startIndex = (currentPage - 1) * itemsPerPage
-    val endIndex = minOf(startIndex + itemsPerPage, allPengajuan.size)
-    val currentPageData = allPengajuan.subList(startIndex, endIndex)
+    val totalPages = remember(allThesis.size) {
+        ceil(allThesis.size.toDouble() / itemsPerPage).toInt().coerceAtLeast(1)
+    }
+
+    val currentPageData = remember(allThesis, currentPage) {
+        val startIndex = (currentPage - 1) * itemsPerPage
+        val endIndex = minOf(startIndex + itemsPerPage, allThesis.size)
+        if (startIndex < allThesis.size) allThesis.subList(startIndex, endIndex) else emptyList()
+    }
+
+    // Load profile
+    LaunchedEffect(Unit) {
+        profileRepo.getMyProfile(
+            onSuccess = { dosenProfile = it },
+            onError = { Log.e("PENGAJUAN_LIST", "Profile error: $it") }
+        )
+    }
+
+    // Load all thesis
+    LaunchedEffect(Unit) {
+        dosenRepo.getAllThesis(
+            onSuccess = { thesisList ->
+                allThesis = thesisList
+                isLoading = false
+                Log.d("PENGAJUAN_LIST", "Loaded ${thesisList.size} thesis")
+            },
+            onError = { error ->
+                errorMessage = error
+                isLoading = false
+                Log.e("PENGAJUAN_LIST", "Failed to load: $error")
+            }
+        )
+    }
 
     Scaffold(
         bottomBar = {
@@ -69,8 +103,10 @@ fun PengajuanListDosenScreen(
                 .background(BackgroundColor)
                 .padding(padding)
         ) {
-
-            DosenHeader(namaDosen = "Pak Afif", role = "Dosen")
+            DosenHeader(
+                namaDosen = dosenProfile?.name ?: "Dosen",
+                role = "Dosen"
+            )
 
             LazyColumn(
                 modifier = Modifier.weight(1f)
@@ -79,7 +115,7 @@ fun PengajuanListDosenScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 16.dp) // 🔥 Padding yang lebih rapi
+                            .padding(horizontal = 16.dp, vertical = 16.dp)
                     ) {
                         Text(
                             text = "Pengajuan Terbaru Tugas Akhir Mahasiswa",
@@ -87,35 +123,109 @@ fun PengajuanListDosenScreen(
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(bottom = 12.dp)
                         )
-                        // Header dipisahkan dari List Item agar tidak scroll
                         PengajuanTableHeader()
                         Spacer(modifier = Modifier.height(4.dp))
                     }
                 }
 
-                // 🛠️ Perbaiki component calling dan hubungkan ke navigasi detail
-                items(currentPageData, key = { it.id }) { pengajuan ->
-                    PengajuanListItem(
-                        pengajuan = pengajuan,
-                        onClick = { onNavigateToDetail(pengajuan.id) } // 🔥 Hubungkan ke navigasi detail
-                    )
+                // Loading state
+                if (isLoading) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(300.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = PrimaryColor)
+                        }
+                    }
+                }
+                // Error state
+                else if (errorMessage != null) {
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            colors = CardDefaults.cardColors(Color(0xFFFFEBEE))
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    Icons.Default.Error,
+                                    contentDescription = null,
+                                    tint = Color.Red,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "⚠️ Gagal memuat data",
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.Red
+                                )
+                                Text(
+                                    text = errorMessage ?: "Unknown error",
+                                    fontSize = 12.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                        }
+                    }
+                }
+                // Empty state
+                else if (allThesis.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    Icons.Default.Description,
+                                    contentDescription = null,
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(64.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Belum ada pengajuan",
+                                    color = Color.Gray,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    }
+                }
+                // Data loaded
+                else {
+                    items(currentPageData, key = { it.id }) { thesis ->
+                        PengajuanListItem(
+                            thesis = thesis,
+                            onClick = { onNavigateToDetail(thesis.id) }
+                        )
+                    }
                 }
 
                 item { Spacer(modifier = Modifier.height(16.dp)) }
             }
 
-            PaginationBar(
-                currentPage = currentPage,
-                totalPages = totalPages,
-                onPageChange = { newPage -> currentPage = newPage }
-            )
+            if (!isLoading && allThesis.isNotEmpty()) {
+                PaginationBar(
+                    currentPage = currentPage,
+                    totalPages = totalPages,
+                    onPageChange = { newPage -> currentPage = newPage }
+                )
+            }
         }
     }
 }
-
-// ===================================
-// KOMPONEN UI LIST PENGAJUAN
-// ===================================
 
 @Composable
 fun DosenHeader(namaDosen: String, role: String) {
@@ -127,7 +237,6 @@ fun DosenHeader(namaDosen: String, role: String) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 🔥 Avatar di kiri agar konsisten dengan dashboard
         Box(
             modifier = Modifier
                 .size(48.dp)
@@ -136,13 +245,12 @@ fun DosenHeader(namaDosen: String, role: String) {
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = namaDosen.first().toString() +
-                        (namaDosen.split(" ").getOrNull(1)?.firstOrNull()?.toString() ?: ""),
+                text = namaDosen.split(" ").take(2).joinToString("") { it.take(1) },
                 color = Color.White,
                 fontWeight = FontWeight.Bold
             )
         }
-        Spacer(modifier = Modifier.width(16.dp)) // 🔥 Spacer untuk memberi jarak
+        Spacer(modifier = Modifier.width(16.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(namaDosen, fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -155,7 +263,7 @@ fun DosenHeader(namaDosen: String, role: String) {
 fun PengajuanTableHeader() {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(Color.White),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(2.dp)
     ) {
@@ -164,28 +272,25 @@ fun PengajuanTableHeader() {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // 🔥 Penyesuaian weight agar kolom lebih rapi
                 Text("Nama Mahasiswa", fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.3f))
                 Text("Judul Tugas Akhir", fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.7f))
                 Text("Tanggal", fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.9f))
                 Text("Aksi", fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.8f))
             }
         }
-        // 🔥 Tidak perlu Divider di dalam Card ini
     }
 }
 
-// 🛠️ Component diganti namanya dari PengajuanItemWithAction menjadi PengajuanListItem
 @Composable
 fun PengajuanListItem(
-    pengajuan: PengajuanMahasiswa,
-    onClick: () -> Unit // Action saat tombol Aksi diklik
+    thesis: Thesis,
+    onClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(Color.White),
         shape = RoundedCornerShape(8.dp),
         elevation = CardDefaults.cardElevation(1.dp)
     ) {
@@ -195,14 +300,10 @@ fun PengajuanListItem(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-
-            // KOLOM NAMA + NIM
             Row(
-                modifier = Modifier.weight(1.3f), // 🔥 Weight disesuaikan dengan header
+                modifier = Modifier.weight(1.3f),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-
-                // Avatarnya dikecilkan sedikit biar balance
                 Box(
                     modifier = Modifier
                         .size(32.dp)
@@ -211,7 +312,7 @@ fun PengajuanListItem(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        pengajuan.namaMahasiswa.first().toString(),
+                        (thesis.student?.name ?: "M").take(1),
                         color = Color.White,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
@@ -222,14 +323,14 @@ fun PengajuanListItem(
 
                 Column {
                     Text(
-                        pengajuan.namaMahasiswa,
+                        thesis.student?.name ?: "Mahasiswa",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        pengajuan.nim,
+                        thesis.studentId.take(8),
                         fontSize = 11.sp,
                         color = Color.Gray,
                         maxLines = 1
@@ -237,31 +338,28 @@ fun PengajuanListItem(
                 }
             }
 
-            // KOLOM JUDUL TA
             Text(
-                pengajuan.judulTA,
+                thesis.title,
                 fontSize = 12.sp,
                 modifier = Modifier
-                    .weight(1.7f) // 🔥 Weight disesuaikan dengan header
+                    .weight(1.7f)
                     .padding(end = 8.dp),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
 
-            // KOLOM TANGGAL
             Text(
-                pengajuan.tanggalPengajuan,
+                thesis.createdAt.substring(0, 10),
                 fontSize = 12.sp,
-                modifier = Modifier.weight(0.9f) // 🔥 Weight disesuaikan dengan header
+                modifier = Modifier.weight(0.9f)
             )
 
-            // KOLOM AKSI (Tombol yang mengarah ke Detail)
             Button(
-                onClick = onClick, // 🔥 Action navigasi ke detail
+                onClick = onClick,
                 modifier = Modifier
-                    .weight(0.8f) // 🔥 Weight disesuaikan dengan header
+                    .weight(0.8f)
                     .height(30.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ActionColor),
+                colors = ButtonDefaults.buttonColors(ActionColor),
                 shape = RoundedCornerShape(16.dp),
                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
             ) {
@@ -271,15 +369,8 @@ fun PengajuanListItem(
     }
 }
 
-// ... (Kode PaginationBar dan CustomDosenBottomBar tetap sama)
-// ...
-
 @Composable
-fun PaginationBar(
-    currentPage: Int,
-    totalPages: Int,
-    onPageChange: (Int) -> Unit
-) {
+fun PaginationBar(currentPage: Int, totalPages: Int, onPageChange: (Int) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -310,42 +401,10 @@ fun CustomDosenBottomBar(
     onNavigateToProfile: () -> Unit
 ) {
     NavigationBar(containerColor = Color.White) {
-
-        CustomNavigationBarItem(
-            index = 0,
-            selectedTab = selectedTab,
-            icon = Icons.Default.Dashboard,
-            label = "Dashboard",
-            onClick = onNavigateToDashboard,
-            onTabSelected = onTabSelected
-        )
-
-        CustomNavigationBarItem(
-            index = 1,
-            selectedTab = selectedTab,
-            icon = Icons.Default.Description,
-            label = "Pengajuan",
-            onClick = {},
-            onTabSelected = onTabSelected
-        )
-
-        CustomNavigationBarItem(
-            index = 2,
-            selectedTab = selectedTab,
-            icon = Icons.Default.CalendarToday,
-            label = "Kalender",
-            onClick = onNavigateToKalender,
-            onTabSelected = onTabSelected
-        )
-
-        CustomNavigationBarItem(
-            index = 3,
-            selectedTab = selectedTab,
-            icon = Icons.Default.Person,
-            label = "Profil",
-            onClick = onNavigateToProfile,
-            onTabSelected = onTabSelected
-        )
+        CustomNavigationBarItem(0, selectedTab, Icons.Default.Dashboard, "Dashboard", onNavigateToDashboard, onTabSelected)
+        CustomNavigationBarItem(1, selectedTab, Icons.Default.Description, "Pengajuan", {}, onTabSelected)
+        CustomNavigationBarItem(2, selectedTab, Icons.Default.CalendarToday, "Kalender", onNavigateToKalender, onTabSelected)
+        CustomNavigationBarItem(3, selectedTab, Icons.Default.Person, "Profil", onNavigateToProfile, onTabSelected)
     }
 }
 
