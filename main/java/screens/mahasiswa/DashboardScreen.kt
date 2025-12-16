@@ -1,0 +1,581 @@
+package com.example.penjadwalan_sidang.screens.mahasiswa
+
+import android.util.Log
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.penjadwalan_sidang.data.model.Thesis
+import com.example.penjadwalan_sidang.data.remote.RetrofitClient
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.format.TextStyle as JavaTextStyle
+import java.util.*
+
+private val PrimaryColor = Color(0xFF4A90E2)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DashboardScreen(
+    onNavigateToForm: () -> Unit,
+    onNavigateToProfile: () -> Unit,
+    onLogout: () -> Unit
+) {
+    val context = LocalContext.current
+    val selectedTab = 0
+
+    var currentMonth by remember { mutableStateOf(YearMonth.now()) }
+    var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+    var showLogoutDialog by remember { mutableStateOf(false) }
+
+    var listPengajuan by remember { mutableStateOf<List<Thesis>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // 🔥 FIXED: Pakai cara baru dengan getInstance(context)
+    LaunchedEffect(Unit) {
+        isLoading = true
+        errorMessage = null
+
+        val api = RetrofitClient.getInstance(context)
+
+        api.getMyThesis().enqueue(object : Callback<List<Thesis>> {
+            override fun onResponse(call: Call<List<Thesis>>, response: Response<List<Thesis>>) {
+                isLoading = false
+                if (response.isSuccessful) {
+                    listPengajuan = response.body() ?: emptyList()
+                    Log.d("API_SUCCESS", "Berhasil load ${listPengajuan.size} thesis")
+                } else {
+                    errorMessage = "Error ${response.code()}: ${response.message()}"
+                    Log.e("API_ERROR", "Gagal: ${response.code()} - ${response.errorBody()?.string()}")
+                }
+            }
+
+            override fun onFailure(call: Call<List<Thesis>>, t: Throwable) {
+                isLoading = false
+                errorMessage = "Koneksi gagal: ${t.message}"
+                Log.e("API_ERROR", "Error Koneksi: ${t.message}")
+            }
+        })
+    }
+
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = { Text("Konfirmasi Logout") },
+            text = { Text("Apakah Anda yakin ingin keluar?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLogoutDialog = false
+                        onLogout()
+                    }
+                ) {
+                    Text("Ya", color = PrimaryColor)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    Scaffold(
+        bottomBar = {
+            BottomNavigationBar(selectedTab = selectedTab) { tab ->
+                when (tab) {
+                    1 -> onNavigateToForm()
+                    2 -> onNavigateToProfile()
+                }
+            }
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFFFFF5F5))
+                .padding(padding)
+                .padding(horizontal = 16.dp)
+        ) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp, bottom = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Fatih Gantenk",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Mahasiswa",
+                            fontSize = 14.sp,
+                            color = Color.Gray
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(PrimaryColor)
+                            .clickable { showLogoutDialog = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "FG",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            item {
+                CalendarView(
+                    currentMonth = currentMonth,
+                    selectedDate = selectedDate,
+                    onMonthChange = { currentMonth = it },
+                    onDateSelected = { selectedDate = it }
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Agenda",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "More",
+                        tint = Color.Gray
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Ujian Tugas Akhir",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 16.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Ruangan R.301",
+                            color = Color.Gray,
+                            fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            Text(
+                                text = "09.00-11.00",
+                                color = Color.Gray,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            item {
+                Text(
+                    text = "Status Pengajuan Saya",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
+            }
+
+            // 🔥 FIXED: Tampilkan data dari API
+            if (isLoading) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = PrimaryColor)
+                    }
+                }
+            } else if (errorMessage != null) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "⚠️ Gagal memuat data",
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFC62828)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = errorMessage ?: "Unknown error",
+                                fontSize = 12.sp,
+                                color = Color.Gray
+                            )
+                        }
+                    }
+                }
+            } else if (listPengajuan.isEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Belum ada pengajuan",
+                                color = Color.Gray,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+                }
+            } else {
+                items(listPengajuan, key = { it.id }) { thesis ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(2.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = thesis.title,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                // Status Badge
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(
+                                            when (thesis.status) {
+                                                "APPROVED" -> Color(0xFF4CAF50)
+                                                "REJECTED" -> Color(0xFFF44336)
+                                                else -> Color(0xFFFFC107)
+                                            }
+                                        )
+                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = thesis.status,
+                                        fontSize = 12.sp,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                // Tanggal
+                                Text(
+                                    text = thesis.createdAt.substring(0, 10),
+                                    fontSize = 12.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = { onNavigateToForm() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = PrimaryColor
+                    ),
+                    shape = RoundedCornerShape(28.dp)
+                ) {
+                    Text(
+                        text = "Ajukan Sidang",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
+    }
+}
+
+// Komponen CalendarView tetap sama (tidak berubah)
+@Composable
+fun CalendarView(
+    currentMonth: YearMonth,
+    selectedDate: LocalDate,
+    onMonthChange: (YearMonth) -> Unit,
+    onDateSelected: (LocalDate) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { onMonthChange(currentMonth.minusMonths(1)) }) {
+                    Icon(Icons.Default.ChevronLeft, "Previous month")
+                }
+                Text(
+                    text = "${currentMonth.month.getDisplayName(JavaTextStyle.SHORT, Locale.getDefault())} ${currentMonth.year}",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                IconButton(onClick = { onMonthChange(currentMonth.plusMonths(1)) }) {
+                    Icon(Icons.Default.ChevronRight, "Next month")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(modifier = Modifier.fillMaxWidth()) {
+                listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat").forEach { day ->
+                    Text(
+                        text = day,
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center,
+                        fontSize = 12.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val daysInMonth = currentMonth.lengthOfMonth()
+            val firstDayOfMonth = currentMonth.atDay(1).dayOfWeek.value % 7
+            val totalCells = ((daysInMonth + firstDayOfMonth + 6) / 7) * 7
+
+            Column {
+                for (week in 0 until (totalCells / 7)) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        for (day in 0 until 7) {
+                            val cellIndex = week * 7 + day
+                            val dayOfMonth = cellIndex - firstDayOfMonth + 1
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .aspectRatio(1f)
+                                    .padding(4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (dayOfMonth in 1..daysInMonth) {
+                                    val date = currentMonth.atDay(dayOfMonth)
+                                    val isSelected = date == selectedDate
+                                    val isToday = date == LocalDate.now()
+
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(CircleShape)
+                                            .background(
+                                                when {
+                                                    isSelected -> Color(0xFF8B5CF6)
+                                                    isToday -> Color(0xFFE0E7FF)
+                                                    else -> Color.Transparent
+                                                }
+                                            )
+                                            .clickable { onDateSelected(date) },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = dayOfMonth.toString().padStart(2, '0'),
+                                            fontSize = 14.sp,
+                                            color = when {
+                                                isSelected -> Color.White
+                                                else -> Color.Black
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun StatusPengajuanItem(status: StatusPengajuan) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(PrimaryColor)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(50.dp)
+                    .background(PrimaryColor)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = status.tanggal,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = status.deskripsi,
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun BottomNavigationBar(selectedTab: Int, onTabSelected: (Int) -> Unit) {
+    NavigationBar(
+        containerColor = Color.White,
+        tonalElevation = 8.dp
+    ) {
+        CustomNavigationBarItemMahasiswa(
+            index = 0,
+            selectedTab = selectedTab,
+            icon = Icons.Default.Dashboard,
+            label = "Dashboard",
+            onTabSelected = onTabSelected
+        )
+
+        CustomNavigationBarItemMahasiswa(
+            index = 1,
+            selectedTab = selectedTab,
+            icon = Icons.Default.Description,
+            label = "Form Pengajuan",
+            onTabSelected = onTabSelected
+        )
+
+        CustomNavigationBarItemMahasiswa(
+            index = 2,
+            selectedTab = selectedTab,
+            icon = Icons.Default.Person,
+            label = "Profil",
+            onTabSelected = onTabSelected
+        )
+    }
+}
+
+@Composable
+fun RowScope.CustomNavigationBarItemMahasiswa(
+    index: Int,
+    selectedTab: Int,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onTabSelected: (Int) -> Unit
+) {
+    val isSelected = selectedTab == index
+    val tintColor = if (isSelected) PrimaryColor else Color.Gray
+
+    NavigationBarItem(
+        selected = isSelected,
+        onClick = { onTabSelected(index) },
+        icon = { Icon(icon, contentDescription = label, tint = tintColor) },
+        label = { Text(label, color = tintColor) },
+        colors = NavigationBarItemDefaults.colors(
+            indicatorColor = PrimaryColor.copy(alpha = 0.1f)
+        )
+    )
+}
+
+data class StatusPengajuan(
+    val tanggal: String,
+    val deskripsi: String
+)
+
+fun getStatusPengajuan(): List<StatusPengajuan> {
+    return listOf(
+        StatusPengajuan(
+            "10 September 2025",
+            "Menunggu penjadwalan ujian oleh pihak Admin Prodi"
+        ),
+        StatusPengajuan(
+            "11 September 2025",
+            "Status: Sudah dijadwalkan oleh pihak admin prodi"
+        )
+    )
+}
