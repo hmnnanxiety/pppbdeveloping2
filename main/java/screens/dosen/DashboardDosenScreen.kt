@@ -1,5 +1,6 @@
 package com.example.penjadwalan_sidang.screens.dosen
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -19,7 +20,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.penjadwalan_sidang.data.model.Thesis
+import com.example.penjadwalan_sidang.data.model.User
 import com.example.penjadwalan_sidang.data.repository.DosenRepository
+import com.example.penjadwalan_sidang.data.repository.ProfileRepository
 
 private val PrimaryColor = Color(0xFF4A90E2)
 
@@ -33,11 +36,32 @@ fun DashboardDosenScreen(
 ) {
     val context = LocalContext.current
     val repository = remember { DosenRepository(context) }
+    val profileRepository = remember { ProfileRepository(context) }
     var selectedTab by remember { mutableIntStateOf(0) }
 
+    // State untuk profile
+    var userProfile by remember { mutableStateOf<User?>(null) }
+    var isLoadingProfile by remember { mutableStateOf(true) }
+
+    // State untuk pending list
     var pendingList by remember { mutableStateOf<List<Thesis>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // Load profile
+    LaunchedEffect(Unit) {
+        profileRepository.getMyProfile(
+            onSuccess = { user ->
+                userProfile = user
+                isLoadingProfile = false
+                Log.d("DASHBOARD_DOSEN", "Profile loaded: ${user.name}, ${user.email}")
+            },
+            onError = { error ->
+                Log.e("DASHBOARD_DOSEN", "Failed to load profile: $error")
+                isLoadingProfile = false
+            }
+        )
+    }
 
     // Load pending thesis
     LaunchedEffect(Unit) {
@@ -45,10 +69,12 @@ fun DashboardDosenScreen(
             onSuccess = { list ->
                 pendingList = list
                 isLoading = false
+                Log.d("DASHBOARD_DOSEN", "Loaded ${list.size} pending thesis")
             },
             onError = { error ->
                 errorMessage = error
                 isLoading = false
+                Log.e("DASHBOARD_DOSEN", "Error loading pending thesis: $error")
             }
         )
     }
@@ -75,7 +101,7 @@ fun DashboardDosenScreen(
                 .background(Color(0xFFFFF5F5))
         ) {
 
-            // HEADER
+            // HEADER dengan data real dari API
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -91,7 +117,17 @@ fun DashboardDosenScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "PA",
+                        text = if (userProfile != null) {
+                            val name = userProfile!!.name ?: "D"
+                            val parts = name.split(" ")
+                            if (parts.size >= 2) {
+                                "${parts[0].take(1)}${parts[1].take(1)}".uppercase()
+                            } else {
+                                name.take(2).uppercase()
+                            }
+                        } else {
+                            "D"
+                        },
                         color = Color.White,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
@@ -101,16 +137,29 @@ fun DashboardDosenScreen(
                 Spacer(modifier = Modifier.width(12.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Pak Afif",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Dosen",
-                        color = Color.Gray,
-                        fontSize = 14.sp
-                    )
+                    if (isLoadingProfile) {
+                        Text(
+                            text = "Loading...",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Dosen",
+                            color = Color.Gray,
+                            fontSize = 14.sp
+                        )
+                    } else {
+                        Text(
+                            text = userProfile?.name ?: "Dosen",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Dosen",
+                            color = Color.Gray,
+                            fontSize = 14.sp
+                        )
+                    }
                 }
 
                 IconButton(onClick = onLogout) {
@@ -239,14 +288,16 @@ fun DashboardDosenScreen(
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
 
-                    repeat(5) {
-                        DosenListItem(
-                            nama = "Budi Santoso",
-                            nim = "20/190001",
-                            judul = "Analisis Jaringan Menggunakan Metode IDS",
-                            tanggal = "20-10-2025",
-                            jam = "09:00–11:00",
-                            isScheduled = true
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Belum ada jadwal",
+                            color = Color.Gray,
+                            fontSize = 14.sp
                         )
                     }
 

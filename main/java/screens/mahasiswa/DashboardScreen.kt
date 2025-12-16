@@ -22,10 +22,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.penjadwalan_sidang.data.model.Thesis
-import com.example.penjadwalan_sidang.data.remote.RetrofitClient
-import retrofit2.Call
-import retrofit2.Callback
-import retrofit2.Response
+import com.example.penjadwalan_sidang.data.model.User
+import com.example.penjadwalan_sidang.data.repository.ProfileRepository
+import com.example.penjadwalan_sidang.data.repository.ThesisRepository
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.TextStyle as JavaTextStyle
@@ -41,41 +40,55 @@ fun DashboardScreen(
     onLogout: () -> Unit
 ) {
     val context = LocalContext.current
+    val thesisRepository = remember { ThesisRepository(context) }
+    val profileRepository = remember { ProfileRepository(context) }
     val selectedTab = 0
 
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     var showLogoutDialog by remember { mutableStateOf(false) }
 
+    // State untuk thesis list
     var listPengajuan by remember { mutableStateOf<List<Thesis>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isLoadingThesis by remember { mutableStateOf(true) }
+    var thesisErrorMessage by remember { mutableStateOf<String?>(null) }
 
-    // 🔥 FIXED: Pakai cara baru dengan getInstance(context)
+    // State untuk profile
+    var userProfile by remember { mutableStateOf<User?>(null) }
+    var isLoadingProfile by remember { mutableStateOf(true) }
+
+    // Load Profile
     LaunchedEffect(Unit) {
-        isLoading = true
-        errorMessage = null
-
-        val api = RetrofitClient.getInstance(context)
-
-        api.getMyThesis().enqueue(object : Callback<List<Thesis>> {
-            override fun onResponse(call: Call<List<Thesis>>, response: Response<List<Thesis>>) {
-                isLoading = false
-                if (response.isSuccessful) {
-                    listPengajuan = response.body() ?: emptyList()
-                    Log.d("API_SUCCESS", "Berhasil load ${listPengajuan.size} thesis")
-                } else {
-                    errorMessage = "Error ${response.code()}: ${response.message()}"
-                    Log.e("API_ERROR", "Gagal: ${response.code()} - ${response.errorBody()?.string()}")
-                }
+        profileRepository.getMyProfile(
+            onSuccess = { user ->
+                userProfile = user
+                isLoadingProfile = false
+                Log.d("DASHBOARD", "Profile loaded: ${user.name}, ${user.email}")
+            },
+            onError = { error ->
+                Log.e("DASHBOARD", "Failed to load profile: $error")
+                isLoadingProfile = false
             }
+        )
+    }
 
-            override fun onFailure(call: Call<List<Thesis>>, t: Throwable) {
-                isLoading = false
-                errorMessage = "Koneksi gagal: ${t.message}"
-                Log.e("API_ERROR", "Error Koneksi: ${t.message}")
+    // Load Thesis List
+    LaunchedEffect(Unit) {
+        isLoadingThesis = true
+        thesisErrorMessage = null
+
+        thesisRepository.getMyThesis(
+            onSuccess = { list ->
+                listPengajuan = list
+                isLoadingThesis = false
+                Log.d("DASHBOARD", "Berhasil load ${list.size} thesis")
+            },
+            onError = { error ->
+                thesisErrorMessage = error
+                isLoadingThesis = false
+                Log.e("DASHBOARD", "Gagal load thesis: $error")
             }
-        })
+        )
     }
 
     if (showLogoutDialog) {
@@ -118,6 +131,7 @@ fun DashboardScreen(
                 .padding(padding)
                 .padding(horizontal = 16.dp)
         ) {
+            // Header dengan data real dari API
             item {
                 Row(
                     modifier = Modifier
@@ -127,16 +141,40 @@ fun DashboardScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text(
-                            text = "Fatih Gantenk",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Mahasiswa",
-                            fontSize = 14.sp,
-                            color = Color.Gray
-                        )
+                        if (isLoadingProfile) {
+                            Text(
+                                text = "Loading...",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Mahasiswa",
+                                fontSize = 14.sp,
+                                color = Color.Gray
+                            )
+                        } else if (userProfile != null) {
+                            Text(
+                                text = userProfile!!.name ?: "User",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Mahasiswa",
+                                fontSize = 14.sp,
+                                color = Color.Gray
+                            )
+                        } else {
+                            Text(
+                                text = "User",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Mahasiswa",
+                                fontSize = 14.sp,
+                                color = Color.Gray
+                            )
+                        }
                     }
                     Box(
                         modifier = Modifier
@@ -147,7 +185,17 @@ fun DashboardScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "FG",
+                            text = if (userProfile != null) {
+                                val name = userProfile!!.name ?: "U"
+                                val parts = name.split(" ")
+                                if (parts.size >= 2) {
+                                    "${parts[0].take(1)}${parts[1].take(1)}".uppercase()
+                                } else {
+                                    name.take(2).uppercase()
+                                }
+                            } else {
+                                "U"
+                            },
                             color = Color.White,
                             fontWeight = FontWeight.Bold
                         )
@@ -155,6 +203,7 @@ fun DashboardScreen(
                 }
             }
 
+            // Calendar
             item {
                 CalendarView(
                     currentMonth = currentMonth,
@@ -165,6 +214,7 @@ fun DashboardScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
+            // Agenda Header
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -185,33 +235,54 @@ fun DashboardScreen(
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
+            // Agenda Card (Static - bisa diisi dari scheduledAt thesis nanti)
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "Ujian Tugas Akhir",
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 16.sp
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Ruangan R.301",
-                            color = Color.Gray,
-                            fontSize = 14.sp
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
+                    // Cek apakah ada thesis yang sudah scheduled
+                    val scheduledThesis = listPengajuan.firstOrNull {
+                        it.scheduledAt != null && it.status == "APPROVED"
+                    }
+
+                    if (scheduledThesis != null) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "Ujian Tugas Akhir",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 16.sp
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Ruangan R.301",
+                                color = Color.Gray,
+                                fontSize = 14.sp
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                Text(
+                                    text = scheduledThesis.scheduledAt?.substring(11, 16) ?: "09:00",
+                                    color = Color.Gray,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "09.00-11.00",
+                                text = "Belum ada jadwal sidang",
                                 color = Color.Gray,
-                                fontSize = 12.sp
+                                fontSize = 14.sp
                             )
                         }
                     }
@@ -219,6 +290,7 @@ fun DashboardScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
+            // Status Pengajuan Header
             item {
                 Text(
                     text = "Status Pengajuan Saya",
@@ -228,8 +300,8 @@ fun DashboardScreen(
                 )
             }
 
-            // 🔥 FIXED: Tampilkan data dari API
-            if (isLoading) {
+            // Loading State
+            if (isLoadingThesis) {
                 item {
                     Box(
                         modifier = Modifier
@@ -240,7 +312,9 @@ fun DashboardScreen(
                         CircularProgressIndicator(color = PrimaryColor)
                     }
                 }
-            } else if (errorMessage != null) {
+            }
+            // Error State
+            else if (thesisErrorMessage != null) {
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -255,14 +329,16 @@ fun DashboardScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = errorMessage ?: "Unknown error",
+                                text = thesisErrorMessage ?: "Unknown error",
                                 fontSize = 12.sp,
                                 color = Color.Gray
                             )
                         }
                     }
                 }
-            } else if (listPengajuan.isEmpty()) {
+            }
+            // Empty State
+            else if (listPengajuan.isEmpty()) {
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -283,7 +359,9 @@ fun DashboardScreen(
                         }
                     }
                 }
-            } else {
+            }
+            // Data dari API
+            else {
                 items(listPengajuan, key = { it.id }) { thesis ->
                     Card(
                         modifier = Modifier
@@ -338,6 +416,7 @@ fun DashboardScreen(
                 }
             }
 
+            // Button Ajukan Sidang
             item {
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
@@ -362,7 +441,6 @@ fun DashboardScreen(
     }
 }
 
-// Komponen CalendarView tetap sama (tidak berubah)
 @Composable
 fun CalendarView(
     currentMonth: YearMonth,
@@ -467,48 +545,6 @@ fun CalendarView(
 }
 
 @Composable
-fun StatusPengajuanItem(status: StatusPengajuan) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(PrimaryColor)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .height(50.dp)
-                    .background(PrimaryColor)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = status.tanggal,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = status.deskripsi,
-                    fontSize = 12.sp,
-                    color = Color.Gray
-                )
-            }
-        }
-    }
-}
-
-@Composable
 fun BottomNavigationBar(selectedTab: Int, onTabSelected: (Int) -> Unit) {
     NavigationBar(
         containerColor = Color.White,
@@ -558,24 +594,6 @@ fun RowScope.CustomNavigationBarItemMahasiswa(
         label = { Text(label, color = tintColor) },
         colors = NavigationBarItemDefaults.colors(
             indicatorColor = PrimaryColor.copy(alpha = 0.1f)
-        )
-    )
-}
-
-data class StatusPengajuan(
-    val tanggal: String,
-    val deskripsi: String
-)
-
-fun getStatusPengajuan(): List<StatusPengajuan> {
-    return listOf(
-        StatusPengajuan(
-            "10 September 2025",
-            "Menunggu penjadwalan ujian oleh pihak Admin Prodi"
-        ),
-        StatusPengajuan(
-            "11 September 2025",
-            "Status: Sudah dijadwalkan oleh pihak admin prodi"
         )
     )
 }

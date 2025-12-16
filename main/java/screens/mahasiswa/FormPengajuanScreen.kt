@@ -19,7 +19,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.penjadwalan_sidang.data.model.User
+import com.example.penjadwalan_sidang.data.repository.ProfileRepository
 import com.example.penjadwalan_sidang.data.repository.ThesisRepository
+
+private val PrimaryColor = Color(0xFF4A90E2)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,11 +33,28 @@ fun FormPengajuanScreen(
     onNavigateLogout: () -> Unit
 ) {
     val context = LocalContext.current
-    val repository = remember { ThesisRepository(context) }
+    val thesisRepository = remember { ThesisRepository(context) }
+    val profileRepository = remember { ProfileRepository(context) }
 
     var judulTA by remember { mutableStateOf("") }
     var linkTA by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
+
+    // Load profile untuk header
+    var userProfile by remember { mutableStateOf<User?>(null) }
+    var isLoadingProfile by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        profileRepository.getMyProfile(
+            onSuccess = { user ->
+                userProfile = user
+                isLoadingProfile = false
+            },
+            onError = {
+                isLoadingProfile = false
+            }
+        )
+    }
 
     Scaffold(
         bottomBar = {
@@ -53,7 +74,7 @@ fun FormPengajuanScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
         ) {
-            // Header
+            // Header dengan data real
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -63,11 +84,19 @@ fun FormPengajuanScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text(
-                        text = "Fatih Gantenk",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    if (isLoadingProfile) {
+                        Text(
+                            text = "Loading...",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    } else {
+                        Text(
+                            text = userProfile?.name ?: "User",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                     Text(
                         text = "Mahasiswa",
                         fontSize = 14.sp,
@@ -78,11 +107,21 @@ fun FormPengajuanScreen(
                     modifier = Modifier
                         .size(48.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF4A90E2)),
+                        .background(PrimaryColor),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "FG",
+                        text = if (userProfile != null) {
+                            val name = userProfile!!.name ?: "U"
+                            val parts = name.split(" ")
+                            if (parts.size >= 2) {
+                                "${parts[0].take(1)}${parts[1].take(1)}".uppercase()
+                            } else {
+                                name.take(2).uppercase()
+                            }
+                        } else {
+                            "U"
+                        },
                         color = Color.White,
                         fontWeight = FontWeight.Bold
                     )
@@ -133,7 +172,7 @@ fun FormPengajuanScreen(
                                     )
                                 },
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color(0xFF4A90E2),
+                                    focusedBorderColor = PrimaryColor,
                                     unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f)
                                 ),
                                 shape = RoundedCornerShape(8.dp),
@@ -172,7 +211,7 @@ fun FormPengajuanScreen(
                                     )
                                 },
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color(0xFF4A90E2),
+                                    focusedBorderColor = PrimaryColor,
                                     unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f)
                                 ),
                                 shape = RoundedCornerShape(8.dp),
@@ -206,7 +245,7 @@ fun FormPengajuanScreen(
                                 // Submit ke API
                                 isLoading = true
 
-                                repository.createThesis(
+                                thesisRepository.createThesis(
                                     title = judulTA,
                                     docUrl = linkTA,
                                     onSuccess = { newThesis ->
@@ -241,7 +280,7 @@ fun FormPengajuanScreen(
                         .height(48.dp)
                         .widthIn(min = 140.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF4A90E2)
+                        containerColor = PrimaryColor
                     ),
                     shape = RoundedCornerShape(8.dp),
                     enabled = !isLoading
