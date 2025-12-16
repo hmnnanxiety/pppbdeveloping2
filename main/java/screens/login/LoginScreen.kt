@@ -77,7 +77,12 @@ fun LoginScreen(
 
                     if (idToken != null) {
                         val email = account.email ?: ""
-                        val role = if (email.contains("dosen") || email.contains("afif")) "DOSEN" else "MAHASISWA"
+                        // Sesuaikan dengan backend logic: @mail.ugm.ac.id = DOSEN
+                        val role = if (email.endsWith("@mail.ugm.ac.id")) {
+                            "DOSEN"
+                        } else {
+                            "MAHASISWA"
+                        }
 
                         Log.d("LOGIN_DEBUG", "Role ditentukan: $role")
 

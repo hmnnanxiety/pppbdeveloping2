@@ -1,5 +1,6 @@
 package com.example.penjadwalan_sidang.screens.dosen
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -21,7 +22,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.penjadwalan_sidang.data.model.Thesis
+import com.example.penjadwalan_sidang.data.model.User
 import com.example.penjadwalan_sidang.data.repository.DosenRepository
+import com.example.penjadwalan_sidang.data.repository.ProfileRepository
 import kotlin.math.ceil
 
 private val PrimaryColor = Color(0xFF4A90E2)
@@ -38,11 +41,31 @@ fun PengajuanListDosenScreen(
 ) {
     val context = LocalContext.current
     val repository = remember { DosenRepository(context) }
+    val profileRepository = remember { ProfileRepository(context) }
     var selectedTab by remember { mutableStateOf(1) }
+
+    // ✅ State untuk Profile
+    var userProfile by remember { mutableStateOf<User?>(null) }
+    var isLoadingProfile by remember { mutableStateOf(true) }
 
     var allPengajuan by remember { mutableStateOf<List<Thesis>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // ✅ Load Profile
+    LaunchedEffect(Unit) {
+        profileRepository.getMyProfile(
+            onSuccess = { user ->
+                userProfile = user
+                isLoadingProfile = false
+                Log.d("PENGAJUAN_LIST", "Profile loaded: ${user.name}, ${user.email}")
+            },
+            onError = { error ->
+                Log.e("PENGAJUAN_LIST", "Failed to load profile: $error")
+                isLoadingProfile = false
+            }
+        )
+    }
 
     // Load all thesis
     LaunchedEffect(Unit) {
@@ -84,7 +107,11 @@ fun PengajuanListDosenScreen(
                 .padding(padding)
         ) {
 
-            DosenHeader(namaDosen = "Pak Afif", role = "Dosen")
+            // ✅ UPDATED: Header dengan data real dari API
+            DosenHeader(
+                userProfile = userProfile,
+                isLoading = isLoadingProfile
+            )
 
             if (isLoading) {
                 Box(
@@ -169,8 +196,12 @@ fun PengajuanListDosenScreen(
     }
 }
 
+// ✅ UPDATED: Header dengan loading state dan data real
 @Composable
-fun DosenHeader(namaDosen: String, role: String) {
+fun DosenHeader(
+    userProfile: User?,
+    isLoading: Boolean
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -187,8 +218,17 @@ fun DosenHeader(namaDosen: String, role: String) {
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = namaDosen.first().toString() +
-                        (namaDosen.split(" ").getOrNull(1)?.firstOrNull()?.toString() ?: ""),
+                text = if (userProfile != null) {
+                    val name = userProfile.name ?: "D"
+                    val parts = name.split(" ")
+                    if (parts.size >= 2) {
+                        "${parts[0].take(1)}${parts[1].take(1)}".uppercase()
+                    } else {
+                        name.take(2).uppercase()
+                    }
+                } else {
+                    "D"
+                },
                 color = Color.White,
                 fontWeight = FontWeight.Bold
             )
@@ -196,8 +236,17 @@ fun DosenHeader(namaDosen: String, role: String) {
         Spacer(modifier = Modifier.width(16.dp))
 
         Column(modifier = Modifier.weight(1f)) {
-            Text(namaDosen, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Text(role, fontSize = 14.sp, color = Color.Gray)
+            if (isLoading) {
+                Text("Loading...", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("Dosen", fontSize = 14.sp, color = Color.Gray)
+            } else {
+                Text(
+                    text = userProfile?.name ?: "Dosen",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text("Dosen", fontSize = 14.sp, color = Color.Gray)
+            }
         }
     }
 }
